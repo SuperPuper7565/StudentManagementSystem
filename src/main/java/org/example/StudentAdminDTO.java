@@ -1,5 +1,10 @@
 package org.example;
 
+/**
+ * Объект передачи данных (DTO) для отображения сводной информации о студенте
+ * в административном интерфейсе.
+ */
+
 public record StudentAdminDTO(
         long id,
         String fullName,

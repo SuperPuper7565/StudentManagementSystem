@@ -1,5 +1,9 @@
 package org.example;
 
+/**
+ * Сервис для форматирования статусов студентов в текстовое представление.
+ */
+
 public class StudentStatusFormatter {
     public String format(StudentStatus status) {
         return switch (status) {

@@ -2,6 +2,11 @@ package org.example;
 
 import java.util.List;
 
+/**
+ * Реализация сервиса управления данными студентов.
+ * Отвечает за бизнес-логику преобразования доменных моделей в DTO для административной панели.
+ */
+
 public class StudentServiceImpl implements StudentService {
 
     private final StudentStatusFormatter statusFormatter;

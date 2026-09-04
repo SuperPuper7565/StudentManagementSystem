@@ -1,0 +1,34 @@
+package org.example;
+
+import java.util.List;
+
+public class StudentServiceImpl implements StudentService {
+
+    private final StudentStatusFormatter statusFormatter;
+
+    // Внедряем форматтер через конструктор
+    public StudentServiceImpl(StudentStatusFormatter statusFormatter) {
+        this.statusFormatter = statusFormatter;
+    }
+
+    @Override
+    public List<StudentAdminDTO> prepareForAdminPanel(List<Student> students) {
+        return students.stream()
+                .map(this::toAdminDto)
+                .toList();
+    }
+
+    private StudentAdminDTO toAdminDto(Student student) {
+        String fullName = student.name() + " " + student.surname();
+        String statusDescription = statusFormatter.format(student.status());
+
+        return new StudentAdminDTO(
+                student.id(),
+                fullName,
+                student.subject(),
+                student.grade(),
+                student.goal().getDescription(),
+                statusDescription
+        );
+    }
+}

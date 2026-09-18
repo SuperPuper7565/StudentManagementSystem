@@ -1,4 +1,7 @@
-package org.example;
+package org.example.application;
+
+import org.example.application.dto.StudentAdminDTO;
+import org.example.domain.model.Student;
 
 import java.util.List;
 

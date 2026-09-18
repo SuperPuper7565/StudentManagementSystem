@@ -1,4 +1,6 @@
-package org.example;
+package org.example.domain.status;
+
+import org.example.domain.model.LessonFormat;
 
 import java.math.BigDecimal;
 

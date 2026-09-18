@@ -1,5 +1,9 @@
-package org.example;
+package org.example.domain.model;
 
+import lombok.Builder;
+import org.example.domain.status.StudentStatus;
+
+@Builder
 public record Student(
         long id,
         String name,

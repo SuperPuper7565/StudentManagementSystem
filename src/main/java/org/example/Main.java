@@ -1,5 +1,16 @@
 package org.example;
 
+import org.example.application.StudentService;
+import org.example.application.StudentServiceImpl;
+import org.example.application.StudentStatusFormatter;
+import org.example.application.dto.StudentAdminDTO;
+import org.example.domain.model.LessonFormat;
+import org.example.domain.model.Student;
+import org.example.domain.model.StudyGoal;
+import org.example.domain.status.Active;
+import org.example.domain.status.Graduated;
+import org.example.domain.status.Paused;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;

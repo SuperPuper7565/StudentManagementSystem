@@ -38,7 +38,7 @@ public class StudentAdminService {
 
         return new StudentAdminDTO(
                 student.id(),
-                student.name() + student.surname(),
+                student.name() + " " + student.surname(),
                 student.subject(),
                 student.grade(),
                 student.goal() != null ? student.goal().name() : "Не указана",

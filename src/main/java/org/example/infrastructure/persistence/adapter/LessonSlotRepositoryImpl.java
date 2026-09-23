@@ -43,6 +43,11 @@ public class LessonSlotRepositoryImpl implements LessonSlotRepository {
                 .toList();
     }
 
+    @Override
+    public boolean existsOverlappingSlot(LocalDateTime startTime, LocalDateTime endTime) {
+        return jpaRepository.existsOverlappingSlot(startTime, endTime);
+    }
+
     private LessonSlot toDomain(LessonSlotEntity entity) {
         LessonSlot slot = new LessonSlot();
         slot.setId(entity.getId());

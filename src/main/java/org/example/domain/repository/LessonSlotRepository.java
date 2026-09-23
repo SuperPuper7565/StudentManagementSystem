@@ -11,4 +11,5 @@ public interface LessonSlotRepository {
     Optional<LessonSlot> findById(Long id);
     List<LessonSlot> findAvailableSlots(LocalDateTime now);
     List<LessonSlot> findSlotsBetween(LocalDateTime start, LocalDateTime end);
+    boolean existsOverlappingSlot(LocalDateTime startTime, LocalDateTime endTime);
 }

@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -32,4 +33,10 @@ public class BookingEntity {
     private boolean isCancelled;
 
     private boolean isAttended;
+
+    @Column(precision = 10, scale = 2)
+    private BigDecimal price;
+
+    @Column(length = 500)
+    private String priceDetails;
 }

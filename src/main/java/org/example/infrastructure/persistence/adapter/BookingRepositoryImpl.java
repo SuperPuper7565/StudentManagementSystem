@@ -63,6 +63,8 @@ public class BookingRepositoryImpl implements BookingRepository {
                 .bookedAt(entity.getBookedAt())
                 .isCancelled(entity.isCancelled())
                 .isAttended(entity.isAttended())
+                .price(entity.getPrice())
+                .priceDetails(entity.getPriceDetails())
                 .build();
     }
 
@@ -85,6 +87,8 @@ public class BookingRepositoryImpl implements BookingRepository {
         entity.setBookedAt(domain.getBookedAt());
         entity.setCancelled(domain.isCancelled());
         entity.setAttended(domain.isAttended());
+        entity.setPrice(domain.getPrice());
+        entity.setPriceDetails(domain.getPriceDetails());
         return entity;
     }
 }

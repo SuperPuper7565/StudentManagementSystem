@@ -36,7 +36,9 @@ public class StudentServiceImpl implements StudentService {
                 student.subject(),
                 student.grade(),
                 student.goal().getDescription(),
-                statusDescription
+                statusDescription,
+                null,
+                null
         );
     }
 }

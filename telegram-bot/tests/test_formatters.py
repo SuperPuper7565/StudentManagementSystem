@@ -7,6 +7,7 @@ from tgbot.formatters import (
     chunk_text,
     clean_text,
     format_datetime,
+    format_price,
     format_student_card,
     format_time_range,
     is_slot_booked,
@@ -85,6 +86,12 @@ def test_slot_booked_accepts_both_names():
     assert not is_slot_booked({})
 
 
+def test_format_price():
+    assert format_price(2000) == "2 000 ₽"
+    assert format_price("1500.50") == "1 500,50 ₽"
+    assert format_price(None) == "—"
+
+
 def test_format_student_card_escapes_html():
     card = format_student_card(
         {
@@ -93,12 +100,16 @@ def test_format_student_card_escapes_html():
             "subject": "Математика",
             "grade": 9,
             "goalDescription": "EGE",
-            "statusDescription": "Активен (ONLINE, 1500 руб/урок)",
+            "statusDescription": "Активен (ONLINE)",
+            "lessonPrice": 1500,
+            "priceDetails": "Индивидуальная цена",
         }
     )
     assert "&lt;Иван&gt;" in card
     assert "онлайн" in card
     assert "ЕГЭ" in card
+    assert "1 500 ₽" in card
+    assert "Индивидуальная цена" in card
 
 
 def test_chunk_text_keeps_content():

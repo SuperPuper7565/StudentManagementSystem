@@ -5,7 +5,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Entity
@@ -34,8 +33,6 @@ public class StudentEntity {
     // Поля для сохранения Sealed Status
     @Column(nullable = false)
     private String statusType; // ACTIVE, PAUSED, GRADUATED
-
-    private BigDecimal lessonPrice;
 
     private String lessonFormat;
 

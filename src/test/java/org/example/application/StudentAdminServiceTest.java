@@ -1,5 +1,6 @@
 package org.example.application;
 
+import org.example.application.dto.PriceQuote;
 import org.example.application.dto.StudentAdminDTO;
 import org.example.domain.model.LessonFormat;
 import org.example.domain.model.Student;
@@ -22,6 +23,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,16 +32,19 @@ class StudentAdminServiceTest {
     @Mock
     private StudentRepository studentRepository;
 
+    @Mock
+    private PricingService pricingService;
+
     @InjectMocks
     private StudentAdminService adminService;
 
     @Test
-    @DisplayName("Получение списка студентов для админки с форматированием статусов через Pattern Matching")
+    @DisplayName("Получение списка студентов для админки с ценой из PricingService")
     void getAllStudentsForAdmin_Success() {
         Student student1 = Student.builder()
                 .id(1L).name("Алексей").surname("Смирнов").subject("Физика").grade(11)
                 .goal(StudyGoal.EGE)
-                .status(new Active(new BigDecimal("1800.00"), LessonFormat.OFFLINE))
+                .status(new Active(LessonFormat.OFFLINE))
                 .build();
 
         Student student2 = Student.builder()
@@ -49,11 +54,20 @@ class StudentAdminServiceTest {
                 .build();
 
         when(studentRepository.findAll()).thenReturn(List.of(student1, student2));
+        when(pricingService.quote(any(Student.class))).thenAnswer(invocation -> {
+            Student student = invocation.getArgument(0);
+            BigDecimal price = student.id() == 1L
+                    ? new BigDecimal("1800.00")
+                    : new BigDecimal("2000.00");
+            return new PriceQuote(new BigDecimal("2000.00"), price, "Тестовая цена");
+        });
 
         List<StudentAdminDTO> result = adminService.getAllStudentsForAdmin();
 
         assertThat(result).hasSize(2);
-        assertThat(result.get(0).statusDescription()).contains("Активен", "OFFLINE", "1800.00");
+        assertThat(result.get(0).statusDescription()).contains("Активен", "OFFLINE");
+        assertThat(result.get(0).lessonPrice()).isEqualByComparingTo("1800.00");
+        assertThat(result.get(0).priceDetails()).isEqualTo("Тестовая цена");
         assertThat(result.get(1).statusDescription()).contains("На паузе", "Каникулы");
     }
 

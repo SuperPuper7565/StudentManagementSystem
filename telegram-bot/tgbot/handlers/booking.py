@@ -15,6 +15,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from ..api import ApiClient, ApiError, ApiUnavailableError
 from ..formatters import (
     format_booking_line,
+    format_price,
     format_time_range,
     is_slot_booked,
     parse_iso_datetime,
@@ -48,7 +49,26 @@ async def _available_slots(api: ApiClient) -> list[dict]:
     return slots
 
 
-def _slots_view(slots: list[dict], page: int) -> tuple[str, InlineKeyboardMarkup]:
+async def _student_price_text(
+    api: ApiClient,
+    db: Database,
+    telegram_id: int,
+) -> str | None:
+    student_id = await db.get_student_id(telegram_id)
+    if student_id is None:
+        return None
+    try:
+        quote = await api.get_student_price(student_id)
+    except (ApiError, ApiUnavailableError):
+        return None
+    return format_price(quote.get("finalPrice"))
+
+
+def _slots_view(
+    slots: list[dict],
+    page: int,
+    price_text: str | None = None,
+) -> tuple[str, InlineKeyboardMarkup]:
     total_pages = _total_pages(len(slots))
     page = max(0, min(page, total_pages - 1))
 
@@ -65,6 +85,9 @@ def _slots_view(slots: list[dict], page: int) -> tuple[str, InlineKeyboardMarkup
             "Нажмите на удобное время — запись создастся сразу."
         )
 
+    if price_text:
+        text += f"\n\n💰 Стоимость занятия: <b>{html.escape(price_text)}</b>"
+
     keyboard = slots_menu(
         slots=slots,
         page=page,
@@ -79,7 +102,7 @@ def _slots_view(slots: list[dict], page: int) -> tuple[str, InlineKeyboardMarkup
 # Свободные слоты
 # ---------------------------------------------------------------------- #
 @router.message(Command("slots"))
-async def cmd_slots(message: Message, state: FSMContext, api: ApiClient) -> None:
+async def cmd_slots(message: Message, state: FSMContext, api: ApiClient, db: Database) -> None:
     await state.clear()
     try:
         slots = await _available_slots(api)
@@ -87,12 +110,18 @@ async def cmd_slots(message: Message, state: FSMContext, api: ApiClient) -> None
         await message.answer(f"⚠️ {html.escape(str(getattr(exc, 'message', exc)))}")
         return
 
-    text, keyboard = _slots_view(slots, 0)
+    price_text = await _student_price_text(api, db, message.from_user.id)
+    text, keyboard = _slots_view(slots, 0, price_text)
     await message.answer(text, reply_markup=keyboard)
 
 
 @router.callback_query(F.data.startswith("slots:"))
-async def cb_slots(callback: CallbackQuery, state: FSMContext, api: ApiClient) -> None:
+async def cb_slots(
+    callback: CallbackQuery,
+    state: FSMContext,
+    api: ApiClient,
+    db: Database,
+) -> None:
     await state.clear()
     try:
         page = int((callback.data or "slots:0").split(":", 1)[1])
@@ -110,7 +139,8 @@ async def cb_slots(callback: CallbackQuery, state: FSMContext, api: ApiClient) -
         )
         return
 
-    text, keyboard = _slots_view(slots, page)
+    price_text = await _student_price_text(api, db, callback.from_user.id)
+    text, keyboard = _slots_view(slots, page, price_text)
     await edit_or_send(callback, text, keyboard)
     await callback.answer()
 
@@ -185,12 +215,15 @@ async def cb_book(
     booking_id = booking.get("id", "—")
     slot_data = booking.get("slot") or slot
     time_range = format_time_range(slot_data.get("startTime"), slot_data.get("endTime"))
+    price = format_price(booking.get("price"))
+    price_line = f"💰 Стоимость: <b>{price}</b>\n" if price != "—" else ""
 
     await edit_or_send(
         callback,
         f"✅ <b>Вы записаны!</b>\n\n"
         f"📅 <b>{time_range}</b>\n"
         f"🎟 Номер записи: <b>{booking_id}</b>\n"
+        f"{price_line}"
         f"👤 ID ученика: {student_id}\n\n"
         f"Отменить запись можно в разделе «Мои записи».",
         after_booking(),

@@ -1,20 +1,25 @@
 spring:
   application:
     name: tutoring-management-system
-  datasource:
-    url: jdbc:h2:mem:tutoringdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
+  profiles:
+    active: dev
   h2:
     console:
       enabled: true
       path: /h2-console
   jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
-    hibernate:
-      ddl-auto: update
+    open-in-view: false
     show-sql: true
+
+pricing:
+  base-price: 2000.00
+  multi-subject-price: 1800.00
+  referral-price: 1800.00
+
+admin:
+  # Ключ для административных операций с ценами.
+  # Если переменная не задана, изменение цен через API отключено.
+  api-key: ${ADMIN_API_KEY:}
 
 springdoc:
   api-docs:
@@ -31,3 +36,33 @@ logging:
     org.example: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: jdbc:h2:file:./data/tutoringdb;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop

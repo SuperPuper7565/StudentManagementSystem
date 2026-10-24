@@ -1,6 +1,7 @@
 package org.example.domain.model;
 
 import lombok.*;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Getter
@@ -15,4 +16,6 @@ public class Booking {
     private LocalDateTime bookedAt;
     private boolean isCancelled;
     private boolean isAttended;
+    private BigDecimal price;
+    private String priceDetails;
 }

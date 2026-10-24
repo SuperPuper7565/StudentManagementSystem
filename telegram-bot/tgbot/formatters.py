@@ -166,6 +166,21 @@ def format_lesson_format(lesson_format: Any) -> str:
     return FORMAT_TITLES.get(str(lesson_format), str(lesson_format))
 
 
+def format_price(value: Any) -> str:
+    """Форматирует цену из API: 2000 -> «2 000 ₽», 1500.5 -> «1 500,50 ₽»."""
+    if value is None or value == "":
+        return "—"
+    try:
+        amount = Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return str(value)
+    if not amount.is_finite():
+        return str(value)
+    if amount == amount.to_integral_value():
+        return f"{int(amount):,} ₽".replace(",", " ")
+    return f"{amount:,.2f} ₽".replace(",", " ").replace(".", ",")
+
+
 def format_student_card(student: dict[str, Any]) -> str:
     """Карточка из StudentAdminDTO (GET /students/admin-list)."""
     full_name = html.escape(str(student.get("fullName") or "Без имени"))
@@ -174,13 +189,21 @@ def format_student_card(student: dict[str, Any]) -> str:
     goal = html.escape(format_goal(student.get("goalDescription")))
     status = html.escape(str(student.get("statusDescription") or "—"))
     status = status.replace("ONLINE", "онлайн").replace("OFFLINE", "офлайн")
+    price = format_price(student.get("lessonPrice"))
+    price_details = str(student.get("priceDetails") or "").strip()
 
-    return (
-        f"👤 <b>{full_name}</b> (ID: {student.get('id', '?')})\n"
-        f"📚 {subject} · {grade} класс\n"
-        f"🎯 Цель: {goal}\n"
-        f"📌 Статус: {status}"
-    )
+    lines = [
+        f"👤 <b>{full_name}</b> (ID: {student.get('id', '?')})",
+        f"📚 {subject} · {grade} класс",
+        f"🎯 Цель: {goal}",
+        f"📌 Статус: {status}",
+    ]
+    if price != "—":
+        price_line = f"💰 Цена занятия: <b>{price}</b>"
+        if price_details and not price_details.lower().startswith("базовая цена"):
+            price_line += f" · {html.escape(price_details)}"
+        lines.append(price_line)
+    return "\n".join(lines)
 
 
 def format_student_profile(student_id: int, student: dict[str, Any]) -> str:

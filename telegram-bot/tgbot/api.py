@@ -55,6 +55,10 @@ class ApiClient:
         data = await self._request("GET", "/api/v1/students/admin-list")
         return data if isinstance(data, list) else []
 
+    async def get_student_price(self, student_id: int) -> dict[str, Any]:
+        data = await self._request("GET", f"/api/v1/students/{student_id}/price")
+        return data if isinstance(data, dict) else {}
+
     async def find_student(self, student_id: int) -> dict[str, Any] | None:
         for student in await self.list_students():
             try:

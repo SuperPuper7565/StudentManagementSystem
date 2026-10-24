@@ -13,8 +13,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -29,11 +27,11 @@ class StudentRegistrationServiceTest {
     private StudentRegistrationService registrationService;
 
     @Test
-    @DisplayName("Регистрация студента: присвоение статуса Active с ценой и форматом")
+    @DisplayName("Регистрация студента: цена не принимается от клиента, статус Active содержит только формат")
     void registerStudent_Success() {
         CreateStudentCommand command = new CreateStudentCommand(
                 "Петр", "Петров", "Информатика", 10,
-                StudyGoal.EGE, new BigDecimal("2000.00"), LessonFormat.ONLINE
+                StudyGoal.EGE, LessonFormat.ONLINE
         );
 
         when(studentRepository.save(any(Student.class)))
@@ -46,7 +44,6 @@ class StudentRegistrationServiceTest {
         assertThat(registered.status()).isInstanceOf(Active.class);
 
         Active activeStatus = (Active) registered.status();
-        assertThat(activeStatus.lessonPrice()).isEqualTo(new BigDecimal("2000.00"));
         assertThat(activeStatus.lessonFormat()).isEqualTo(LessonFormat.ONLINE);
 
         verify(studentRepository, times(1)).save(any(Student.class));

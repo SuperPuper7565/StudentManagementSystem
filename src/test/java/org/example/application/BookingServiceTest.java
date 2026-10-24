@@ -1,6 +1,8 @@
 package org.example.application;
 
+import org.example.application.dto.PriceQuote;
 import org.example.domain.model.Booking;
+import org.example.domain.model.LessonFormat;
 import org.example.domain.model.LessonSlot;
 import org.example.domain.model.Student;
 import org.example.domain.repository.BookingRepository;
@@ -16,6 +18,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -40,6 +43,9 @@ class BookingServiceTest {
     @Mock
     private NotificationService notificationService;
 
+    @Mock
+    private PricingService pricingService;
+
     @InjectMocks
     private BookingService bookingService;
 
@@ -52,7 +58,7 @@ class BookingServiceTest {
                 .id(1L)
                 .name("Иван")
                 .surname("Иванов")
-                .status(new Active(null, null))
+                .status(new Active(LessonFormat.ONLINE))
                 .build();
 
         freeSlot = new LessonSlot();
@@ -62,15 +68,23 @@ class BookingServiceTest {
     }
 
     @Test
-    @DisplayName("Успешное бронирование урока активным студентом")
+    @DisplayName("Успешное бронирование урока активным студентом с фиксацией цены")
     void bookLesson_Success() {
         when(studentRepository.findById(1L)).thenReturn(Optional.of(activeStudent));
         when(slotRepository.findById(10L)).thenReturn(Optional.of(freeSlot));
+        when(pricingService.quote(activeStudent))
+                .thenReturn(new PriceQuote(
+                        new BigDecimal("2000.00"),
+                        new BigDecimal("1800.00"),
+                        "Скидка за второй предмет"
+                ));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Booking booking = bookingService.bookLesson(1L, 10L);
 
         assertThat(booking).isNotNull();
+        assertThat(booking.getPrice()).isEqualByComparingTo("1800.00");
+        assertThat(booking.getPriceDetails()).isEqualTo("Скидка за второй предмет");
         assertThat(freeSlot.isBooked()).isTrue();
         verify(slotRepository, times(1)).save(freeSlot);
         verify(notificationService, times(1)).notifyBookingCreated(eq("Иван"), any());

@@ -1,6 +1,7 @@
 package org.example.application;
 
 import lombok.RequiredArgsConstructor;
+import org.example.application.dto.PriceQuote;
 import org.example.application.dto.StudentAdminDTO;
 import org.example.domain.model.Student;
 import org.example.domain.repository.StudentRepository;
@@ -14,6 +15,7 @@ import java.util.List;
 public class StudentAdminService {
 
     private final StudentRepository studentRepository;
+    private final PricingService pricingService;
 
     public List<StudentAdminDTO> getAllStudentsForAdmin() {
         return studentRepository.findAll().stream()
@@ -30,11 +32,13 @@ public class StudentAdminService {
 
     private StudentAdminDTO toAdminDTO(Student student) {
         String statusDesc = switch (student.status()) {
-            case Active a -> "Активен (" + a.lessonFormat() + ", " + a.lessonPrice() + " руб/урок)";
+            case Active a -> "Активен (" + a.lessonFormat() + ")";
             case Paused p -> "На паузе до " + p.endDate() + " (Причина: " + p.reason() + ")";
             case Graduated g -> "Выпустился " + g.graduationDate() + " (Балл: " + g.examResult() + ")";
             case null -> "Статус не указан";
         };
+
+        PriceQuote quote = pricingService.quote(student);
 
         return new StudentAdminDTO(
                 student.id(),
@@ -42,7 +46,9 @@ public class StudentAdminService {
                 student.subject(),
                 student.grade(),
                 student.goal() != null ? student.goal().name() : "Не указана",
-                statusDesc
+                statusDesc,
+                quote.finalPrice(),
+                quote.details()
         );
     }
 }

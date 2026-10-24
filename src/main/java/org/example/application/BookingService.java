@@ -1,6 +1,7 @@
 package org.example.application;
 
 import lombok.RequiredArgsConstructor;
+import org.example.application.dto.PriceQuote;
 import org.example.domain.model.Booking;
 import org.example.domain.model.LessonSlot;
 import org.example.domain.model.Student;
@@ -20,6 +21,7 @@ public class BookingService {
     private final LessonSlotRepository slotRepository;
     private final BookingRepository bookingRepository;
     private final NotificationService notificationService;
+    private final PricingService pricingService;
 
     public Booking bookLesson(Long studentId, Long slotId) {
         Student student = studentRepository.findById(studentId)
@@ -36,6 +38,8 @@ public class BookingService {
             throw new IllegalStateException("Слот уже забронирован");
         }
 
+        PriceQuote quote = pricingService.quote(student);
+
         slot.setBooked(true);
         slotRepository.save(slot);
 
@@ -45,6 +49,8 @@ public class BookingService {
                 .bookedAt(LocalDateTime.now())
                 .isCancelled(false)
                 .isAttended(false)
+                .price(quote.finalPrice())
+                .priceDetails(quote.details())
                 .build();
 
         Booking savedBooking = bookingRepository.save(booking);

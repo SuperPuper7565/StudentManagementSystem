@@ -4,14 +4,14 @@
 
 ## Технологический стек
 * **Java 25**, **Spring Boot 3**
-* **Spring Data JPA**, **H2 Database** (In-Memory)
+* **Spring Data JPA**, **H2 Database** (файловая, профиль `dev`)
 * **OpenAPI / Swagger UI**
 * **JUnit 5**, **Mockito**, **AssertJ**
 
 ## Архитектура
 Приложение спроектировано по принципам **Onion Architecture** (Чистая архитектура):
 * `domain` — доменные сущности и интерфейсы репозиториев (бизнес-правила без внешних зависимостей).
-* `application` — прикладной слой, содержащий 9 сервисов бизнес-логики и DTO.
+* `application` — прикладной слой, содержащий 10 сервисов бизнес-логики и DTO.
 * `infrastructure` — инфраструктурный слой (REST-контроллеры, JPA-сущности, адаптеры БД).
 
 ## Основные сервисы (Application Layer)
@@ -24,8 +24,62 @@
 7. `CancellationService` — отмена и замена слотов.
 8. `AttendanceTrackingService` — фиксация посещаемости и проведенных уроков.
 9. `NotificationService` — генерация сообщений и уведомлений.
+10. `PricingService` — расчёт стоимости занятия и индивидуальные цены.
 
 ## Запуск приложения
+
 1. Клонировать репозиторий:
    ```bash
-   git clone [https://github.com/SuperPuper7565/StudentManagementSystem.git](https://github.com/SuperPuper7565/StudentManagementSystem.git)
+   git clone https://github.com/SuperPuper7565/StudentManagementSystem.git
+   cd StudentManagementSystem
+   ```
+
+2. Запустить бэкенд:
+   ```bash
+   mvn spring-boot:run
+   ```
+
+3. Открыть Swagger UI: <http://localhost:8080/swagger-ui.html>.
+
+По умолчанию активен профиль `dev`. Файловая H2 создаётся в `./data/tutoringdb`
+и сохраняет данные между перезапусками. Профиль `test` использует in-memory H2.
+
+## Стоимость занятий
+
+Стоимость рассчитывает только сервер. Клиент не передаёт цену при регистрации:
+поле `lessonPrice` игнорируется, базовая цена задаётся в `application.yml`.
+
+Правила первого этапа:
+
+- базовая цена — **2000 ₽** за занятие 90 минут;
+- индивидуальная цена (например, **1500 ₽** по знакомству) задаётся администратором;
+- итоговая цена — минимум из применимых правил, скидки не суммируются;
+- цена фиксируется в `Booking.price` и `Booking.priceDetails` в момент бронирования;
+- старые записи сохраняют цену, рассчитанную при их создании.
+
+### Эндпоинты цен
+
+| Метод | Путь | Назначение |
+|---|---|---|
+| `GET` | `/api/v1/students/{id}/price` | актуальная цена для ученика |
+| `PUT` | `/api/v1/students/{id}/pricing` | назначить индивидуальную цену |
+| `DELETE` | `/api/v1/students/{id}/pricing` | убрать индивидуальную цену |
+
+Для `PUT` и `DELETE` нужен заголовок `X-Admin-Key`. Ключ задаётся переменной
+окружения `ADMIN_API_KEY`. Если переменная не задана, административные операции
+с ценами возвращают `403`.
+
+Пример:
+
+```bash
+curl -X PUT http://localhost:8080/api/v1/students/1/pricing \
+  -H "Content-Type: application/json" \
+  -H "X-Admin-Key: $ADMIN_API_KEY" \
+  -d '{"individualPrice":1500.00,"reason":"по знакомству"}'
+```
+
+## Тесты
+
+```bash
+mvn test
+```

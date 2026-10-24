@@ -20,7 +20,7 @@ public class StudentRegistrationService {
                 .subject(command.subject())
                 .grade(command.grade())
                 .goal(command.goal())
-                .status(new Active(command.lessonPrice(), command.lessonFormat()))
+                .status(new Active(command.lessonFormat()))
                 .build();
 
         return studentRepository.save(student);

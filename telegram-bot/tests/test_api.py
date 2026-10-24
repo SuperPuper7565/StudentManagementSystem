@@ -30,7 +30,6 @@ def test_register_student_posts_payload():
                     "subject": "Математика",
                     "grade": 9,
                     "goal": "OGE",
-                    "lessonPrice": "1500.00",
                     "lessonFormat": "ONLINE",
                 }
             )
@@ -43,7 +42,32 @@ def test_register_student_posts_payload():
     assert captured["method"] == "POST"
     assert captured["path"] == "/api/v1/students"
     assert captured["payload"]["goal"] == "OGE"
-    assert captured["payload"]["lessonPrice"] == "1500.00"
+    assert "lessonPrice" not in captured["payload"]
+
+
+def test_get_student_price():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["path"] = request.url.path
+        return httpx.Response(
+            200,
+            json={"basePrice": 2000, "finalPrice": 1500, "details": "Индивидуальная цена"},
+        )
+
+    async def scenario():
+        api = ApiClient("http://backend", transport=httpx.MockTransport(handler))
+        try:
+            return await api.get_student_price(5)
+        finally:
+            await api.aclose()
+
+    result = _run(scenario())
+
+    assert captured["method"] == "GET"
+    assert captured["path"] == "/api/v1/students/5/price"
+    assert result["finalPrice"] == 1500
 
 
 def test_book_lesson_sends_query_params():

@@ -16,8 +16,8 @@ from ..formatters import (
     clean_text,
     format_goal,
     format_lesson_format,
+    format_price,
     parse_grade,
-    parse_price,
 )
 from ..keyboards import (
     cancel_flow,
@@ -37,7 +37,7 @@ _VALID_FORMATS = {"ONLINE", "OFFLINE"}
 
 
 def _step(number: int, text: str) -> str:
-    return f"📝 <b>Регистрация</b> · шаг {number} из 7\n\n{text}"
+    return f"📝 <b>Регистрация</b> · шаг {number} из 6\n\n{text}"
 
 
 async def _start_registration(
@@ -76,7 +76,6 @@ async def cb_register(callback: CallbackQuery, state: FSMContext) -> None:
         Registration.subject,
         Registration.grade,
         Registration.goal,
-        Registration.price,
         Registration.lesson_format,
         Registration.confirm,
     ),
@@ -158,28 +157,12 @@ async def reg_goal(callback: CallbackQuery, state: FSMContext) -> None:
         return
 
     await state.update_data(goal=goal)
-    await state.set_state(Registration.price)
-    await callback.message.edit_text(
-        _step(6, "Введите стоимость одного занятия в рублях.\nНапример: 1500 или 1500,50."),
-        reply_markup=cancel_flow(),
-    )
-    await callback.answer()
-
-
-@router.message(Registration.price, PLAIN_TEXT)
-async def reg_price(message: Message, state: FSMContext) -> None:
-    try:
-        price = parse_price(message.text or "")
-    except ValueError as exc:
-        await message.answer(f"⚠️ {html.escape(str(exc))}")
-        return
-
-    await state.update_data(price=str(price))
     await state.set_state(Registration.lesson_format)
-    await message.answer(
-        _step(7, "Выберите формат занятий."),
+    await callback.message.edit_text(
+        _step(6, "Выберите формат занятий."),
         reply_markup=formats_menu(),
     )
+    await callback.answer()
 
 
 @router.callback_query(Registration.lesson_format, F.data.startswith("format:"))
@@ -199,8 +182,8 @@ async def reg_format(callback: CallbackQuery, state: FSMContext) -> None:
         f"Предмет: <b>{html.escape(data['subject'])}</b>\n"
         f"Класс: <b>{data['grade']}</b>\n"
         f"Цель: <b>{html.escape(format_goal(data['goal']))}</b>\n"
-        f"Цена занятия: <b>{html.escape(data['price'])} ₽</b>\n"
-        f"Формат: <b>{html.escape(format_lesson_format(lesson_format))}</b>"
+        f"Формат: <b>{html.escape(format_lesson_format(lesson_format))}</b>\n\n"
+        "Стоимость занятия рассчитает сервис после создания профиля."
     )
     await state.set_state(Registration.confirm)
     await edit_or_send(callback, summary, registration_confirm())
@@ -228,7 +211,7 @@ async def reg_confirm(
     settings: Settings,
 ) -> None:
     data = await state.get_data()
-    required = ("first_name", "last_name", "subject", "grade", "goal", "price", "lesson_format")
+    required = ("first_name", "last_name", "subject", "grade", "goal", "lesson_format")
     if any(key not in data for key in required):
         await state.clear()
         await callback.answer("Данные регистрации потеряны. Начните заново.", show_alert=True)
@@ -241,7 +224,6 @@ async def reg_confirm(
         "subject": data["subject"],
         "grade": int(data["grade"]),
         "goal": data["goal"],
-        "lessonPrice": data["price"],
         "lessonFormat": data["lesson_format"],
     }
 
@@ -268,6 +250,15 @@ async def reg_confirm(
     await db.link_student(callback.from_user.id, int(student_id))
     await state.clear()
 
+    price_line = ""
+    try:
+        quote = await api.get_student_price(int(student_id))
+        price_line = (
+            f"\n💰 Стоимость занятия: <b>{format_price(quote.get('finalPrice'))}</b>"
+        )
+    except (ApiError, ApiUnavailableError):
+        pass
+
     name = html.escape(
         " ".join(
             part
@@ -280,7 +271,8 @@ async def reg_confirm(
         callback,
         f"✅ Профиль создан!\n\n"
         f"👤 <b>{name}</b>\n"
-        f"🆔 ID ученика: <b>{student_id}</b>\n\n"
+        f"🆔 ID ученика: <b>{student_id}</b>\n"
+        f"{price_line}\n\n"
         f"Теперь можно выбирать свободные слоты и записываться на занятия.",
         main_menu(settings.is_admin(callback.from_user.id), True),
     )

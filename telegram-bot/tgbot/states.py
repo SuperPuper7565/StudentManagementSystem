@@ -9,7 +9,6 @@ class Registration(StatesGroup):
     subject = State()
     grade = State()
     goal = State()
-    price = State()
     lesson_format = State()
     confirm = State()
 

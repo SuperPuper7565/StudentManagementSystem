@@ -48,7 +48,7 @@ public class StudentRepositoryImpl implements StudentRepository {
 
     private Student toDomain(StudentEntity entity) {
         StudentStatus status = switch (entity.getStatusType()) {
-            case "ACTIVE" -> new Active(entity.getLessonPrice(),
+            case "ACTIVE" -> new Active(
                     entity.getLessonFormat() != null ? LessonFormat.valueOf(entity.getLessonFormat()) : null);
             case "PAUSED" -> new Paused(entity.getPauseReason(), entity.getPauseStartDate(), entity.getPauseEndDate());
             case "GRADUATED" -> new Graduated(entity.getGraduationDate(), entity.getExamResult() != null ? entity.getExamResult() : 0);
@@ -88,7 +88,6 @@ public class StudentRepositoryImpl implements StudentRepository {
         switch (status) {
             case Active a -> {
                 entity.setStatusType("ACTIVE");
-                entity.setLessonPrice(a.lessonPrice());
                 entity.setLessonFormat(a.lessonFormat() != null ? a.lessonFormat().name() : null);
             }
             case Paused p -> {

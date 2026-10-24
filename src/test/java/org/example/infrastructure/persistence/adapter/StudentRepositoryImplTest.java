@@ -10,13 +10,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 
-import java.math.BigDecimal;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
+@ActiveProfiles("test")
 @Import(StudentRepositoryImpl.class)
 class StudentRepositoryImplTest {
 
@@ -35,7 +36,7 @@ class StudentRepositoryImplTest {
                 .subject("Математика")
                 .grade(11)
                 .goal(StudyGoal.EGE)
-                .status(new Active(new BigDecimal("2500.00"), LessonFormat.ONLINE))
+                .status(new Active(LessonFormat.ONLINE))
                 .build();
 
         Student saved = studentRepository.save(newStudent);
@@ -49,7 +50,6 @@ class StudentRepositoryImplTest {
         assertThat(found.get().status()).isInstanceOf(Active.class);
 
         Active activeStatus = (Active) found.get().status();
-        assertThat(activeStatus.lessonPrice()).isEqualByComparingTo("2500.00");
         assertThat(activeStatus.lessonFormat()).isEqualTo(LessonFormat.ONLINE);
     }
 }

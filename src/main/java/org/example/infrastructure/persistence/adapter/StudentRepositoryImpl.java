@@ -68,7 +68,9 @@ public class StudentRepositoryImpl implements StudentRepository {
 
     private StudentEntity toEntity(Student domain) {
         StudentEntity entity = new StudentEntity();
-        entity.setId(domain.id());
+        if (domain.id() != 0L) {
+            entity.setId(domain.id());
+        }
         entity.setFirstName(domain.name());
         entity.setLastName(domain.surname());
         entity.setSubject(domain.subject());

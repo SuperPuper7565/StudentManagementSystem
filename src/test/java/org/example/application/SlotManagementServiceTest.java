@@ -27,7 +27,7 @@ class SlotManagementServiceTest {
     @Test
     @DisplayName("Создание слота: проверка фиксации длительности на 90 минут")
     void createSlot_Success() {
-        LocalDateTime start = LocalDateTime.of(2026, 10, 1, 15, 0);
+        LocalDateTime start = LocalDateTime.now().plusDays(1).withHour(15).withMinute(0).withSecond(0).withNano(0);
 
         when(slotRepository.save(any(LessonSlot.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));

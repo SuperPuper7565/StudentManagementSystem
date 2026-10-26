@@ -27,6 +27,9 @@ public class BookingEntity {
     @JoinColumn(name = "slot_id", nullable = false)
     private LessonSlotEntity slot;
 
+    @Column(length = 255)
+    private String subject;
+
     @Column(nullable = false)
     private LocalDateTime bookedAt;
 

@@ -15,6 +15,7 @@ import java.util.List;
 public class StudentAdminService {
 
     private final StudentRepository studentRepository;
+    private final StudentSubjectService subjectService;
     private final PricingService pricingService;
 
     public List<StudentAdminDTO> getAllStudentsForAdmin() {
@@ -44,6 +45,7 @@ public class StudentAdminService {
                 student.id(),
                 student.name() + " " + student.surname(),
                 student.subject(),
+                subjectService.getSubjects(student),
                 student.grade(),
                 student.goal() != null ? student.goal().name() : "Не указана",
                 statusDesc,

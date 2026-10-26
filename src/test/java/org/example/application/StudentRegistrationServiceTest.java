@@ -5,6 +5,7 @@ import org.example.domain.model.LessonFormat;
 import org.example.domain.model.Student;
 import org.example.domain.model.StudyGoal;
 import org.example.domain.repository.StudentRepository;
+import org.example.domain.repository.StudentSubjectRepository;
 import org.example.domain.status.Active;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,9 @@ class StudentRegistrationServiceTest {
     @Mock
     private StudentRepository studentRepository;
 
+    @Mock
+    private StudentSubjectRepository subjectRepository;
+
     @InjectMocks
     private StudentRegistrationService registrationService;
 
@@ -35,7 +39,15 @@ class StudentRegistrationServiceTest {
         );
 
         when(studentRepository.save(any(Student.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenReturn(Student.builder()
+                        .id(1L)
+                        .name("Петр")
+                        .surname("Петров")
+                        .subject("Информатика")
+                        .grade(10)
+                        .goal(StudyGoal.EGE)
+                        .status(new Active(LessonFormat.ONLINE))
+                        .build());
 
         Student registered = registrationService.registerStudent(command);
 
@@ -47,5 +59,6 @@ class StudentRegistrationServiceTest {
         assertThat(activeStatus.lessonFormat()).isEqualTo(LessonFormat.ONLINE);
 
         verify(studentRepository, times(1)).save(any(Student.class));
+        verify(subjectRepository, times(1)).add(1L, "Информатика");
     }
 }

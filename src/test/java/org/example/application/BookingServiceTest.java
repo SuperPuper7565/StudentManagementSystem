@@ -47,6 +47,9 @@ class BookingServiceTest {
     @Mock
     private PricingService pricingService;
 
+    @Mock
+    private StudentSubjectService subjectService;
+
     @InjectMocks
     private BookingService bookingService;
 
@@ -59,6 +62,7 @@ class BookingServiceTest {
                 .id(1L)
                 .name("Иван")
                 .surname("Иванов")
+                .subject("Математика")
                 .status(new Active(LessonFormat.ONLINE))
                 .build();
 
@@ -73,6 +77,7 @@ class BookingServiceTest {
     void bookLesson_Success() {
         when(studentRepository.findById(1L)).thenReturn(Optional.of(activeStudent));
         when(slotRepository.findById(10L)).thenReturn(Optional.of(freeSlot));
+        when(subjectService.getSubjects(activeStudent)).thenReturn(List.of("Математика"));
         when(pricingService.quote(activeStudent))
                 .thenReturn(new PriceQuote(
                         new BigDecimal("2000.00"),
@@ -83,9 +88,10 @@ class BookingServiceTest {
                 ));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Booking booking = bookingService.bookLesson(1L, 10L);
+        Booking booking = bookingService.bookLesson(1L, 10L, "Математика");
 
         assertThat(booking).isNotNull();
+        assertThat(booking.getSubject()).isEqualTo("Математика");
         assertThat(booking.getPrice()).isEqualByComparingTo("1800.00");
         assertThat(booking.getPriceDetails()).isEqualTo("Скидка за второй предмет");
         assertThat(booking.isTrial()).isFalse();
@@ -99,6 +105,7 @@ class BookingServiceTest {
     void bookLesson_PersistsTrialFlag() {
         when(studentRepository.findById(1L)).thenReturn(Optional.of(activeStudent));
         when(slotRepository.findById(10L)).thenReturn(Optional.of(freeSlot));
+        when(subjectService.getSubjects(activeStudent)).thenReturn(List.of("Математика"));
         when(pricingService.quote(activeStudent))
                 .thenReturn(new PriceQuote(
                         new BigDecimal("2000.00"),
@@ -109,10 +116,25 @@ class BookingServiceTest {
                 ));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Booking booking = bookingService.bookLesson(1L, 10L);
+        Booking booking = bookingService.bookLesson(1L, 10L, "Математика");
 
         assertThat(booking.getPrice()).isEqualByComparingTo("1000.00");
         assertThat(booking.isTrial()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Нельзя записаться на предмет, который не закреплён за учеником")
+    void bookLesson_ThrowsException_WhenSubjectIsNotRegistered() {
+        when(studentRepository.findById(1L)).thenReturn(Optional.of(activeStudent));
+        when(slotRepository.findById(10L)).thenReturn(Optional.of(freeSlot));
+        when(subjectService.getSubjects(activeStudent)).thenReturn(List.of("Математика"));
+
+        assertThatThrownBy(() -> bookingService.bookLesson(1L, 10L, "Физика"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("нет предмета");
+
+        assertThat(freeSlot.isBooked()).isFalse();
+        verify(bookingRepository, never()).save(any());
     }
 
     @Test
@@ -125,7 +147,7 @@ class BookingServiceTest {
 
         when(studentRepository.findById(2L)).thenReturn(Optional.of(pausedStudent));
 
-        assertThatThrownBy(() -> bookingService.bookLesson(2L, 10L))
+        assertThatThrownBy(() -> bookingService.bookLesson(2L, 10L, "Математика"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("студент не активен");
 

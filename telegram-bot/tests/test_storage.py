@@ -1,5 +1,7 @@
 import asyncio
 
+import aiosqlite
+
 from tgbot.storage import Database
 
 
@@ -26,6 +28,7 @@ def test_booking_lifecycle(tmp_path):
     db = Database(tmp_path / "bot.sqlite3")
     booking = {
         "id": 42,
+        "subject": "Математика",
         "slot": {
             "id": 7,
             "startTime": "2026-10-25T14:00:00",
@@ -41,6 +44,7 @@ def test_booking_lifecycle(tmp_path):
         assert len(rows) == 1
         assert rows[0]["booking_id"] == 42
         assert rows[0]["student_id"] == 3
+        assert rows[0]["subject"] == "Математика"
         assert rows[0]["status"] == "active"
 
         await db.set_attendance(42, True)
@@ -50,6 +54,39 @@ def test_booking_lifecycle(tmp_path):
         await db.mark_cancelled(42)
         assert await db.list_bookings(100) == []
         assert len(await db.list_bookings(100, include_cancelled=True)) == 1
+
+    _run(scenario())
+
+
+def test_init_adds_subject_column_to_existing_database(tmp_path):
+    path = tmp_path / "old.sqlite3"
+
+    async def scenario():
+        async with aiosqlite.connect(path) as db:
+            await db.execute(
+                """
+                CREATE TABLE bookings (
+                    booking_id INTEGER PRIMARY KEY,
+                    telegram_id INTEGER NOT NULL,
+                    student_id  INTEGER NOT NULL,
+                    slot_id     INTEGER,
+                    start_time  TEXT    NOT NULL,
+                    end_time    TEXT,
+                    status      TEXT    NOT NULL DEFAULT 'active',
+                    attended    INTEGER,
+                    created_at  TEXT    NOT NULL
+                )
+                """
+            )
+            await db.commit()
+
+        await Database(path).init()
+
+        async with aiosqlite.connect(path) as db:
+            async with db.execute("PRAGMA table_info(bookings)") as cursor:
+                columns = {row[1] for row in await cursor.fetchall()}
+
+        assert "subject" in columns
 
     _run(scenario())
 

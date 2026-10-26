@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     slot_id     INTEGER,
     start_time  TEXT    NOT NULL,
     end_time    TEXT,
+    subject     TEXT,
     status      TEXT    NOT NULL DEFAULT 'active',
     attended    INTEGER,
     created_at  TEXT    NOT NULL
@@ -49,6 +50,12 @@ class Database:
         async with aiosqlite.connect(self.path) as db:
             await db.execute("PRAGMA journal_mode=WAL")
             await db.executescript(SCHEMA)
+
+            async with db.execute("PRAGMA table_info(bookings)") as cursor:
+                columns = {row[1] for row in await cursor.fetchall()}
+            if "subject" not in columns:
+                await db.execute("ALTER TABLE bookings ADD COLUMN subject TEXT")
+
             await db.commit()
 
     # ------------------------------------------------------------------ #
@@ -99,20 +106,25 @@ class Database:
         if not start_time:
             raise ValueError("В ответе сервиса отсутствует время слота")
 
+        subject = booking.get("subject")
+        if subject is None:
+            subject = slot_data.get("subject")
+
         async with aiosqlite.connect(self.path) as db:
             await db.execute(
                 """
                 INSERT INTO bookings (
                     booking_id, telegram_id, student_id, slot_id,
-                    start_time, end_time, status, attended, created_at
+                    start_time, end_time, subject, status, attended, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, 'active', NULL, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'active', NULL, ?)
                 ON CONFLICT (booking_id) DO UPDATE SET
                     telegram_id = excluded.telegram_id,
                     student_id  = excluded.student_id,
                     slot_id     = excluded.slot_id,
                     start_time  = excluded.start_time,
-                    end_time    = excluded.end_time
+                    end_time    = excluded.end_time,
+                    subject     = excluded.subject
                 """,
                 (
                     booking_id,
@@ -121,6 +133,7 @@ class Database:
                     _as_int(slot_data.get("id")),
                     str(start_time),
                     str(end_time) if end_time else None,
+                    str(subject) if subject else None,
                     _now_iso(),
                 ),
             )

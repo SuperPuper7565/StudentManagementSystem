@@ -14,6 +14,7 @@ import org.example.infrastructure.persistence.repository.StudentJpaRepository;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -57,6 +58,15 @@ public class BookingRepositoryImpl implements BookingRepository {
         return bookingJpaRepository.countAttendedBookings(studentId) > 0;
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public long countAttendedSubjects(Long studentId, Collection<String> subjects) {
+        if (subjects == null || subjects.isEmpty()) {
+            return 0;
+        }
+        return bookingJpaRepository.countAttendedSubjects(studentId, subjects);
+    }
+
     private Booking toDomain(BookingEntity entity) {
         Student student = Student.builder()
                 .id(entity.getStudent().getId())
@@ -74,6 +84,7 @@ public class BookingRepositoryImpl implements BookingRepository {
                 .id(entity.getId())
                 .student(student)
                 .slot(slot)
+                .subject(entity.getSubject())
                 .bookedAt(entity.getBookedAt())
                 .isCancelled(entity.isCancelled())
                 .isAttended(entity.isAttended())
@@ -99,6 +110,7 @@ public class BookingRepositoryImpl implements BookingRepository {
             entity.setSlot(slotEntity);
         }
 
+        entity.setSubject(domain.getSubject());
         entity.setBookedAt(domain.getBookedAt());
         entity.setCancelled(domain.isCancelled());
         entity.setAttended(domain.isAttended());

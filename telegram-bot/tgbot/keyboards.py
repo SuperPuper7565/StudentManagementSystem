@@ -139,6 +139,23 @@ def slots_menu(
     return _kb(*rows)
 
 
+def subjects_menu(slot_id: int, subjects: list[str]) -> InlineKeyboardMarkup:
+    rows: list[list[Button]] = []
+    for index, subject in enumerate(subjects):
+        label = subject if len(subject) <= 55 else subject[:54] + "…"
+        rows.append(
+            [
+                Button(
+                    text=f"📚 {label}",
+                    callback_data=f"booksubj:{int(slot_id)}:{index}",
+                )
+            ]
+        )
+    rows.append([Button(text="↩️ Назад", callback_data="slots:0")])
+    rows.append([Button(text="🏠 В меню", callback_data="menu")])
+    return _kb(*rows)
+
+
 def bookings_menu(rows_data: list[dict[str, Any]]) -> InlineKeyboardMarkup:
     rows: list[list[Button]] = []
     for booking in rows_data:

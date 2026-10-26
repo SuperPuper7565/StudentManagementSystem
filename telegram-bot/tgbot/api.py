@@ -59,6 +59,12 @@ class ApiClient:
         data = await self._request("GET", f"/api/v1/students/{student_id}/price")
         return data if isinstance(data, dict) else {}
 
+    async def get_student_subjects(self, student_id: int) -> list[str]:
+        data = await self._request("GET", f"/api/v1/students/{student_id}/subjects")
+        if not isinstance(data, list):
+            return []
+        return [str(subject) for subject in data if str(subject).strip()]
+
     async def find_student(self, student_id: int) -> dict[str, Any] | None:
         for student in await self.list_students():
             try:
@@ -85,11 +91,11 @@ class ApiClient:
     # ------------------------------------------------------------------ #
     # Бронирования
     # ------------------------------------------------------------------ #
-    async def book_lesson(self, student_id: int, slot_id: int) -> dict[str, Any]:
+    async def book_lesson(self, student_id: int, slot_id: int, subject: str) -> dict[str, Any]:
         return await self._request(
             "POST",
             "/api/v1/bookings",
-            params={"studentId": student_id, "slotId": slot_id},
+            params={"studentId": student_id, "slotId": slot_id, "subject": subject},
         )
 
     async def cancel_booking(self, booking_id: int) -> None:

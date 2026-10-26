@@ -34,6 +34,7 @@ public class StudentServiceImpl implements StudentService {
                 student.id(),
                 fullName,
                 student.subject(),
+                student.subject() == null ? List.of() : List.of(student.subject()),
                 student.grade(),
                 student.goal().getDescription(),
                 statusDescription,

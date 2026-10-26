@@ -16,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,6 +35,9 @@ class PricingServiceTest {
     @Mock
     private BookingRepository bookingRepository;
 
+    @Mock
+    private StudentSubjectService subjectService;
+
     private PricingService pricingService;
     private Student student;
 
@@ -46,6 +50,7 @@ class PricingServiceTest {
                 studentRepository,
                 pricingRepository,
                 bookingRepository,
+                subjectService,
                 properties
         );
 
@@ -62,10 +67,15 @@ class PricingServiceTest {
         when(bookingRepository.hasAttendedLesson(1L)).thenReturn(true);
     }
 
+    private void singleSubject() {
+        when(subjectService.getSubjects(student)).thenReturn(List.of("Математика"));
+    }
+
     @Test
     @DisplayName("Без индивидуальной цены и без пробного действует базовая цена 2000")
     void quote_ReturnsBasePrice() {
         trialAlreadyUsed();
+        singleSubject();
         when(pricingRepository.findById(1L)).thenReturn(Optional.empty());
 
         PriceQuote quote = pricingService.quote(student);
@@ -81,6 +91,7 @@ class PricingServiceTest {
     @DisplayName("Индивидуальная цена 1500 понижает стоимость занятия")
     void quote_AppliesIndividualPrice() {
         trialAlreadyUsed();
+        singleSubject();
         when(pricingRepository.findById(1L)).thenReturn(Optional.of(
                 new StudentPricing(1L, new BigDecimal("1500.00"), "по знакомству")
         ));
@@ -97,6 +108,7 @@ class PricingServiceTest {
     @DisplayName("Индивидуальная цена выше базовой не увеличивает стоимость")
     void quote_DoesNotIncreasePrice() {
         trialAlreadyUsed();
+        singleSubject();
         when(pricingRepository.findById(1L)).thenReturn(Optional.of(
                 new StudentPricing(1L, new BigDecimal("2500.00"), null)
         ));
@@ -113,6 +125,7 @@ class PricingServiceTest {
     @DisplayName("Первое пробное занятие стоит 1000 и побеждает индивидуальную цену")
     void quote_AppliesTrialPrice() {
         trialAvailable();
+        singleSubject();
         when(pricingRepository.findById(1L)).thenReturn(Optional.of(
                 new StudentPricing(1L, new BigDecimal("1500.00"), "по знакомству")
         ));
@@ -129,6 +142,7 @@ class PricingServiceTest {
     @DisplayName("Активное пробное бронирование не даёт вторую пробную цену")
     void quote_DoesNotApplyTrial_WhenTrialAlreadyBooked() {
         when(bookingRepository.hasActiveTrial(1L)).thenReturn(true);
+        singleSubject();
         when(pricingRepository.findById(1L)).thenReturn(Optional.empty());
 
         PriceQuote quote = pricingService.quote(student);
@@ -142,6 +156,7 @@ class PricingServiceTest {
     @DisplayName("После посещённого занятия пробная цена больше не действует")
     void quote_DoesNotApplyTrial_WhenStudentHasAttendedLesson() {
         trialAlreadyUsed();
+        singleSubject();
         when(pricingRepository.findById(1L)).thenReturn(Optional.empty());
 
         PriceQuote quote = pricingService.quote(student);
@@ -149,6 +164,67 @@ class PricingServiceTest {
         assertThat(quote.finalPrice()).isEqualByComparingTo("2000.00");
         assertThat(quote.trial()).isFalse();
         assertThat(quote.appliedRules()).containsExactly("BASE");
+    }
+
+    @Test
+    @DisplayName("После занятий по двум предметам действует цена 1800")
+    void quote_AppliesMultiSubjectPrice() {
+        trialAlreadyUsed();
+        when(subjectService.getSubjects(student)).thenReturn(List.of("Математика", "Физика"));
+        when(bookingRepository.countAttendedSubjects(eq(1L), any())).thenReturn(2L);
+        when(pricingRepository.findById(1L)).thenReturn(Optional.empty());
+
+        PriceQuote quote = pricingService.quote(student);
+
+        assertThat(quote.finalPrice()).isEqualByComparingTo("1800.00");
+        assertThat(quote.trial()).isFalse();
+        assertThat(quote.appliedRules()).containsExactly("MULTI_SUBJECT");
+        assertThat(quote.details()).contains("двум предметам", "1800");
+    }
+
+    @Test
+    @DisplayName("Цена 1800 не снижается дальше при трёх посещённых предметах")
+    void quote_KeepsMultiSubjectPriceForThreeSubjects() {
+        trialAlreadyUsed();
+        when(subjectService.getSubjects(student))
+                .thenReturn(List.of("Математика", "Физика", "Информатика"));
+        when(bookingRepository.countAttendedSubjects(eq(1L), any())).thenReturn(3L);
+        when(pricingRepository.findById(1L)).thenReturn(Optional.empty());
+
+        PriceQuote quote = pricingService.quote(student);
+
+        assertThat(quote.finalPrice()).isEqualByComparingTo("1800.00");
+        assertThat(quote.appliedRules()).containsExactly("MULTI_SUBJECT");
+    }
+
+    @Test
+    @DisplayName("Пока посещён только один предмет, цена остаётся базовой")
+    void quote_DoesNotApplyMultiSubjectPrice_WhenOnlyOneSubjectAttended() {
+        trialAlreadyUsed();
+        when(subjectService.getSubjects(student)).thenReturn(List.of("Математика", "Физика"));
+        when(bookingRepository.countAttendedSubjects(eq(1L), any())).thenReturn(1L);
+        when(pricingRepository.findById(1L)).thenReturn(Optional.empty());
+
+        PriceQuote quote = pricingService.quote(student);
+
+        assertThat(quote.finalPrice()).isEqualByComparingTo("2000.00");
+        assertThat(quote.appliedRules()).containsExactly("BASE");
+    }
+
+    @Test
+    @DisplayName("Индивидуальная цена 1500 побеждает цену за два предмета 1800")
+    void quote_IndividualPriceWinsOverMultiSubjectPrice() {
+        trialAlreadyUsed();
+        when(subjectService.getSubjects(student)).thenReturn(List.of("Математика", "Физика"));
+        when(bookingRepository.countAttendedSubjects(eq(1L), any())).thenReturn(2L);
+        when(pricingRepository.findById(1L)).thenReturn(Optional.of(
+                new StudentPricing(1L, new BigDecimal("1500.00"), "по знакомству")
+        ));
+
+        PriceQuote quote = pricingService.quote(student);
+
+        assertThat(quote.finalPrice()).isEqualByComparingTo("1500.00");
+        assertThat(quote.appliedRules()).containsExactly("INDIVIDUAL");
     }
 
     @Test

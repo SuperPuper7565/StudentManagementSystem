@@ -70,6 +70,28 @@ def test_get_student_price():
     assert result["finalPrice"] == 1500
 
 
+def test_get_student_subjects():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["path"] = request.url.path
+        return httpx.Response(200, json=["Математика", "Физика"])
+
+    async def scenario():
+        api = ApiClient("http://backend", transport=httpx.MockTransport(handler))
+        try:
+            return await api.get_student_subjects(5)
+        finally:
+            await api.aclose()
+
+    result = _run(scenario())
+
+    assert captured["method"] == "GET"
+    assert captured["path"] == "/api/v1/students/5/subjects"
+    assert result == ["Математика", "Физика"]
+
+
 def test_book_lesson_sends_query_params():
     captured = {}
 
@@ -80,14 +102,18 @@ def test_book_lesson_sends_query_params():
     async def scenario():
         api = ApiClient("http://backend", transport=httpx.MockTransport(handler))
         try:
-            return await api.book_lesson(student_id=3, slot_id=9)
+            return await api.book_lesson(student_id=3, slot_id=9, subject="Математика")
         finally:
             await api.aclose()
 
     result = _run(scenario())
 
     assert result["id"] == 42
-    assert captured["params"] == {"studentId": "3", "slotId": "9"}
+    assert captured["params"] == {
+        "studentId": "3",
+        "slotId": "9",
+        "subject": "Математика",
+    }
 
 
 def test_mark_attendance_sends_boolean():
@@ -120,7 +146,7 @@ def test_error_message_is_extracted():
     async def scenario():
         api = ApiClient("http://backend", transport=httpx.MockTransport(handler))
         try:
-            await api.book_lesson(1, 2)
+            await api.book_lesson(1, 2, "Математика")
         finally:
             await api.aclose()
 

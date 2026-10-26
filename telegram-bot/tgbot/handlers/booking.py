@@ -27,6 +27,7 @@ from ..keyboards import (
     cancel_confirm,
     onboarding_menu,
     slots_menu,
+    subjects_menu,
 )
 from ..storage import Database
 from ..ui import edit_or_send
@@ -192,7 +193,112 @@ async def cb_book(
         return
 
     try:
-        booking = await api.book_lesson(student_id, slot_id)
+        subjects = await api.get_student_subjects(student_id)
+    except ApiError as exc:
+        await callback.answer("Не удалось загрузить предметы", show_alert=True)
+        await edit_or_send(callback, f"⚠️ {html.escape(exc.message)}", back_menu())
+        return
+    except ApiUnavailableError as exc:
+        await callback.answer("Сервис недоступен", show_alert=True)
+        await edit_or_send(callback, f"⚠️ {html.escape(str(exc))}", back_menu())
+        return
+
+    if not subjects:
+        await callback.answer("У профиля нет предметов", show_alert=True)
+        await edit_or_send(
+            callback,
+            "У вашего профиля не указаны предметы. Попросите преподавателя добавить предмет.",
+            back_menu(),
+        )
+        return
+
+    price_text = await _student_price_text(api, db, callback.from_user.id)
+    time_range = format_time_range(slot.get("startTime"), slot.get("endTime"))
+    text = (
+        "📚 <b>Выберите предмет</b>\n\n"
+        f"📅 <b>{html.escape(time_range)}</b>\n"
+    )
+    if price_text and price_text != "—":
+        text += f"\n💰 Стоимость занятия: <b>{html.escape(price_text)}</b>\n"
+    text += "\nПредмет должен быть закреплён за вами в профиле."
+
+    await edit_or_send(callback, text, subjects_menu(slot_id, subjects))
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("booksubj:"))
+async def cb_book_subject(
+    callback: CallbackQuery,
+    api: ApiClient,
+    db: Database,
+) -> None:
+    parts = (callback.data or "").split(":")
+    if len(parts) != 3:
+        await callback.answer("Некорректный предмет.", show_alert=True)
+        return
+
+    try:
+        slot_id = int(parts[1])
+        subject_index = int(parts[2])
+    except ValueError:
+        await callback.answer("Некорректный предмет.", show_alert=True)
+        return
+
+    student_id = await db.get_student_id(callback.from_user.id)
+    if student_id is None:
+        await callback.answer("Сначала создайте профиль или привяжите ID.", show_alert=True)
+        await edit_or_send(
+            callback,
+            "Чтобы записаться, создайте профиль ученика или привяжите существующий ID.",
+            onboarding_menu(),
+        )
+        return
+
+    try:
+        subjects = await api.get_student_subjects(student_id)
+    except ApiError as exc:
+        await callback.answer("Не удалось загрузить предметы", show_alert=True)
+        await edit_or_send(callback, f"⚠️ {html.escape(exc.message)}", back_menu())
+        return
+    except ApiUnavailableError as exc:
+        await callback.answer("Сервис недоступен", show_alert=True)
+        await edit_or_send(callback, f"⚠️ {html.escape(str(exc))}", back_menu())
+        return
+
+    if subject_index < 0 or subject_index >= len(subjects):
+        await callback.answer("Список предметов изменился", show_alert=True)
+        await edit_or_send(
+            callback,
+            "Список предметов изменился. Выберите слот заново.",
+            back_menu(),
+        )
+        return
+
+    subject = subjects[subject_index]
+
+    try:
+        slots = await _available_slots(api)
+    except (ApiError, ApiUnavailableError) as exc:
+        await callback.answer("Сервис недоступен", show_alert=True)
+        await edit_or_send(
+            callback,
+            f"⚠️ {html.escape(str(getattr(exc, 'message', exc)))}",
+            back_menu(),
+        )
+        return
+
+    slot = next(
+        (item for item in slots if int(item.get("id", -1)) == slot_id),
+        None,
+    )
+    if slot is None:
+        await callback.answer("Этот слот уже занят или недоступен.", show_alert=True)
+        text, keyboard = _slots_view(slots, 0)
+        await edit_or_send(callback, text, keyboard)
+        return
+
+    try:
+        booking = await api.book_lesson(student_id, slot_id, subject)
     except ApiError as exc:
         await callback.answer(f"Не удалось записаться: {exc.message}"[:200], show_alert=True)
         try:
@@ -217,11 +323,13 @@ async def cb_book(
     time_range = format_time_range(slot_data.get("startTime"), slot_data.get("endTime"))
     price = format_price(booking.get("price"))
     price_line = f"💰 Стоимость: <b>{price}</b>\n" if price != "—" else ""
+    booked_subject = html.escape(str(booking.get("subject") or subject))
 
     await edit_or_send(
         callback,
         f"✅ <b>Вы записаны!</b>\n\n"
         f"📅 <b>{time_range}</b>\n"
+        f"📚 Предмет: <b>{booked_subject}</b>\n"
         f"🎟 Номер записи: <b>{booking_id}</b>\n"
         f"{price_line}"
         f"👤 ID ученика: {student_id}\n\n"

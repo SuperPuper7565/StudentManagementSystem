@@ -6,6 +6,7 @@ import pytest
 from tgbot.formatters import (
     chunk_text,
     clean_text,
+    format_booking_line,
     format_datetime,
     format_price,
     format_student_card,
@@ -98,6 +99,7 @@ def test_format_student_card_escapes_html():
             "id": 3,
             "fullName": "<Иван>",
             "subject": "Математика",
+            "subjects": ["Математика", "Физика"],
             "grade": 9,
             "goalDescription": "EGE",
             "statusDescription": "Активен (ONLINE)",
@@ -110,6 +112,21 @@ def test_format_student_card_escapes_html():
     assert "ЕГЭ" in card
     assert "1 500 ₽" in card
     assert "Индивидуальная цена" in card
+    assert "Математика, Физика" in card
+
+
+def test_format_booking_line_includes_subject():
+    line = format_booking_line(
+        {
+            "booking_id": 7,
+            "start_time": "2026-10-25T14:00:00",
+            "end_time": "2026-10-25T15:30:00",
+            "subject": "Физика",
+            "status": "active",
+        }
+    )
+    assert "Запись #7" in line
+    assert "Физика" in line
 
 
 def test_chunk_text_keeps_content():

@@ -76,6 +76,9 @@ def format_slot_line(slot: dict[str, Any]) -> str:
 def format_booking_line(row: dict[str, Any]) -> str:
     booking_id = row.get("booking_id", "?")
     line = f"🎟 <b>Запись #{booking_id}</b> — {format_time_range(row.get('start_time'), row.get('end_time'))}"
+    subject = str(row.get("subject") or "").strip()
+    if subject:
+        line += f"\n📚 {html.escape(subject)}"
     if row.get("status") == "cancelled":
         line += " <i>(отменена)</i>"
     elif row.get("attended") == 1:
@@ -184,7 +187,12 @@ def format_price(value: Any) -> str:
 def format_student_card(student: dict[str, Any]) -> str:
     """Карточка из StudentAdminDTO (GET /students/admin-list)."""
     full_name = html.escape(str(student.get("fullName") or "Без имени"))
-    subject = html.escape(str(student.get("subject") or "—"))
+    subjects = student.get("subjects")
+    if isinstance(subjects, list) and subjects:
+        subject_text = ", ".join(str(item) for item in subjects if str(item).strip())
+    else:
+        subject_text = str(student.get("subject") or "—")
+    subject = html.escape(subject_text or "—")
     grade = student.get("grade", "—")
     goal = html.escape(format_goal(student.get("goalDescription")))
     status = html.escape(str(student.get("statusDescription") or "—"))

@@ -16,6 +16,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -56,6 +57,7 @@ class BookingRepositoryImplTest {
         Booking saved = repository.save(Booking.builder()
                 .student(studentDomain)
                 .slot(slotDomain)
+                .subject("Математика")
                 .bookedAt(LocalDateTime.now())
                 .isCancelled(false)
                 .isAttended(false)
@@ -79,5 +81,63 @@ class BookingRepositoryImplTest {
 
         assertThat(repository.hasActiveTrial(student.getId())).isFalse();
         assertThat(repository.hasAttendedLesson(student.getId())).isTrue();
+    }
+
+    @Test
+    @DisplayName("Считаются только посещённые и неотменённые занятия по предметам ученика")
+    void countsAttendedSubjects() {
+        StudentEntity student = new StudentEntity();
+        student.setFirstName("Мария");
+        student.setLastName("Петрова");
+        student.setStatusType("ACTIVE");
+        student.setLessonFormat("ONLINE");
+        student = studentJpaRepository.save(student);
+
+        Student studentDomain = Student.builder().id(student.getId()).build();
+
+        Booking math = repository.save(bookingFor(studentDomain, "Математика"));
+        Booking physics = repository.save(bookingFor(studentDomain, "Физика"));
+
+        math.setAttended(true);
+        repository.save(math);
+        physics.setAttended(true);
+        repository.save(physics);
+
+        assertThat(repository.countAttendedSubjects(
+                student.getId(), List.of("Математика", "Физика")
+        )).isEqualTo(2);
+        assertThat(repository.countAttendedSubjects(
+                student.getId(), List.of("Математика")
+        )).isEqualTo(1);
+
+        physics.setCancelled(true);
+        repository.save(physics);
+
+        assertThat(repository.countAttendedSubjects(
+                student.getId(), List.of("Математика", "Физика")
+        )).isEqualTo(1);
+    }
+
+    private Booking bookingFor(Student student, String subject) {
+        LessonSlotEntity slot = new LessonSlotEntity();
+        slot.setStartTime(LocalDateTime.now().plusDays(1));
+        slot.setEndTime(slot.getStartTime().plusMinutes(90));
+        slot.setBooked(true);
+        slot = slotJpaRepository.save(slot);
+
+        LessonSlot slotDomain = new LessonSlot();
+        slotDomain.setId(slot.getId());
+
+        return Booking.builder()
+                .student(student)
+                .slot(slotDomain)
+                .subject(subject)
+                .bookedAt(LocalDateTime.now())
+                .isCancelled(false)
+                .isAttended(false)
+                .isTrial(false)
+                .price(new BigDecimal("2000.00"))
+                .priceDetails("Базовая цена")
+                .build();
     }
 }

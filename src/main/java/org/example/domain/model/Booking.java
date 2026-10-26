@@ -13,6 +13,7 @@ public class Booking {
     private Long id;
     private Student student;
     private LessonSlot slot;
+    private String subject;
     private LocalDateTime bookedAt;
     private boolean isCancelled;
     private boolean isAttended;

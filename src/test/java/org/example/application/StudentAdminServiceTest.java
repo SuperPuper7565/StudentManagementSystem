@@ -33,6 +33,9 @@ class StudentAdminServiceTest {
     private StudentRepository studentRepository;
 
     @Mock
+    private StudentSubjectService subjectService;
+
+    @Mock
     private PricingService pricingService;
 
     @InjectMocks
@@ -54,6 +57,10 @@ class StudentAdminServiceTest {
                 .build();
 
         when(studentRepository.findAll()).thenReturn(List.of(student1, student2));
+        when(subjectService.getSubjects(any(Student.class))).thenAnswer(invocation -> {
+            Student student = invocation.getArgument(0);
+            return List.of(student.subject());
+        });
         when(pricingService.quote(any(Student.class))).thenAnswer(invocation -> {
             Student student = invocation.getArgument(0);
             BigDecimal price = student.id() == 1L
@@ -72,6 +79,7 @@ class StudentAdminServiceTest {
 
         assertThat(result).hasSize(2);
         assertThat(result.get(0).statusDescription()).contains("Активен", "OFFLINE");
+        assertThat(result.get(0).subjects()).containsExactly("Физика");
         assertThat(result.get(0).lessonPrice()).isEqualByComparingTo("1800.00");
         assertThat(result.get(0).priceDetails()).isEqualTo("Тестовая цена");
         assertThat(result.get(1).statusDescription()).contains("На паузе", "Каникулы");

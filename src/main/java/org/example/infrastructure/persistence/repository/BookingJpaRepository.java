@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,4 +30,15 @@ public interface BookingJpaRepository extends JpaRepository<BookingEntity, Long>
             "where student_id = :studentId and is_attended = true",
             nativeQuery = true)
     long countAttendedBookings(@Param("studentId") Long studentId);
+
+    @Query(value = "select count(distinct subject) from bookings " +
+            "where student_id = :studentId " +
+            "and is_attended = true " +
+            "and is_cancelled = false " +
+            "and subject in (:subjects)",
+            nativeQuery = true)
+    long countAttendedSubjects(
+            @Param("studentId") Long studentId,
+            @Param("subjects") Collection<String> subjects
+    );
 }

@@ -22,8 +22,12 @@ public class BookingController {
 
     @PostMapping
     @Operation(summary = "Запись студента на свободный слот")
-    public ResponseEntity<Booking> bookLesson(@RequestParam Long studentId, @RequestParam Long slotId) {
-        Booking booking = bookingService.bookLesson(studentId, slotId);
+    public ResponseEntity<Booking> bookLesson(
+            @RequestParam Long studentId,
+            @RequestParam Long slotId,
+            @RequestParam String subject
+    ) {
+        Booking booking = bookingService.bookLesson(studentId, slotId, subject);
         return ResponseEntity.ok(booking);
     }
 

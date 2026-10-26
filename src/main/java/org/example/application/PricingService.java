@@ -23,6 +23,7 @@ public class PricingService {
     private final StudentRepository studentRepository;
     private final StudentPricingRepository pricingRepository;
     private final BookingRepository bookingRepository;
+    private final StudentSubjectService subjectService;
     private final PricingProperties properties;
 
     public BigDecimal defaultPrice() {
@@ -66,6 +67,15 @@ public class PricingService {
             }
         }
 
+        if (isMultiSubjectActive(student)) {
+            BigDecimal multiSubjectPrice = properties.getMultiSubjectPrice();
+            candidates.add(new PriceCandidate(
+                    multiSubjectPrice,
+                    "MULTI_SUBJECT",
+                    "Цена за занятия по двум предметам " + formatMoney(multiSubjectPrice)
+            ));
+        }
+
         PriceCandidate best = candidates.get(0);
         for (PriceCandidate candidate : candidates) {
             if (candidate.price().compareTo(best.price()) < 0) {
@@ -85,6 +95,14 @@ public class PricingService {
     private boolean isTrialAvailable(Student student) {
         return !bookingRepository.hasActiveTrial(student.id())
                 && !bookingRepository.hasAttendedLesson(student.id());
+    }
+
+    private boolean isMultiSubjectActive(Student student) {
+        List<String> subjects = subjectService.getSubjects(student);
+        if (subjects.size() < 2) {
+            return false;
+        }
+        return bookingRepository.countAttendedSubjects(student.id(), subjects) >= 2;
     }
 
     public void setIndividualPrice(Long studentId, BigDecimal individualPrice, String reason) {

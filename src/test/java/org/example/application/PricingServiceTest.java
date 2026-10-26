@@ -38,6 +38,9 @@ class PricingServiceTest {
     @Mock
     private StudentSubjectService subjectService;
 
+    @Mock
+    private ReferralService referralService;
+
     private PricingService pricingService;
     private Student student;
 
@@ -46,11 +49,14 @@ class PricingServiceTest {
         PricingProperties properties = new PricingProperties();
         properties.setBasePrice(new BigDecimal("2000.00"));
         properties.setTrialPrice(new BigDecimal("1000.00"));
+        properties.setMultiSubjectPrice(new BigDecimal("1800.00"));
+        properties.setReferralPrice(new BigDecimal("1800.00"));
         pricingService = new PricingService(
                 studentRepository,
                 pricingRepository,
                 bookingRepository,
                 subjectService,
+                referralService,
                 properties
         );
 
@@ -217,6 +223,53 @@ class PricingServiceTest {
         trialAlreadyUsed();
         when(subjectService.getSubjects(student)).thenReturn(List.of("Математика", "Физика"));
         when(bookingRepository.countAttendedSubjects(eq(1L), any())).thenReturn(2L);
+        when(pricingRepository.findById(1L)).thenReturn(Optional.of(
+                new StudentPricing(1L, new BigDecimal("1500.00"), "по знакомству")
+        ));
+
+        PriceQuote quote = pricingService.quote(student);
+
+        assertThat(quote.finalPrice()).isEqualByComparingTo("1500.00");
+        assertThat(quote.appliedRules()).containsExactly("INDIVIDUAL");
+    }
+
+    @Test
+    @DisplayName("Активный реферал даёт цену 1800")
+    void quote_AppliesReferralPrice() {
+        trialAlreadyUsed();
+        singleSubject();
+        when(referralService.isActiveForStudent(1L)).thenReturn(true);
+        when(pricingRepository.findById(1L)).thenReturn(Optional.empty());
+
+        PriceQuote quote = pricingService.quote(student);
+
+        assertThat(quote.finalPrice()).isEqualByComparingTo("1800.00");
+        assertThat(quote.trial()).isFalse();
+        assertThat(quote.appliedRules()).containsExactly("REFERRAL");
+        assertThat(quote.details()).contains("Реферальная цена", "1800");
+    }
+
+    @Test
+    @DisplayName("Пробное занятие 1000 побеждает реферальную цену 1800")
+    void quote_TrialPriceWinsOverReferral() {
+        trialAvailable();
+        singleSubject();
+        when(referralService.isActiveForStudent(1L)).thenReturn(true);
+        when(pricingRepository.findById(1L)).thenReturn(Optional.empty());
+
+        PriceQuote quote = pricingService.quote(student);
+
+        assertThat(quote.finalPrice()).isEqualByComparingTo("1000.00");
+        assertThat(quote.trial()).isTrue();
+        assertThat(quote.appliedRules()).containsExactly("TRIAL");
+    }
+
+    @Test
+    @DisplayName("Индивидуальная цена 1500 побеждает реферальную цену 1800")
+    void quote_IndividualPriceWinsOverReferral() {
+        trialAlreadyUsed();
+        singleSubject();
+        when(referralService.isActiveForStudent(1L)).thenReturn(true);
         when(pricingRepository.findById(1L)).thenReturn(Optional.of(
                 new StudentPricing(1L, new BigDecimal("1500.00"), "по знакомству")
         ));

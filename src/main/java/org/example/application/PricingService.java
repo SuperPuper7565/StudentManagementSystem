@@ -24,6 +24,7 @@ public class PricingService {
     private final StudentPricingRepository pricingRepository;
     private final BookingRepository bookingRepository;
     private final StudentSubjectService subjectService;
+    private final ReferralService referralService;
     private final PricingProperties properties;
 
     public BigDecimal defaultPrice() {
@@ -73,6 +74,15 @@ public class PricingService {
                     multiSubjectPrice,
                     "MULTI_SUBJECT",
                     "Цена за занятия по двум предметам " + formatMoney(multiSubjectPrice)
+            ));
+        }
+
+        if (referralService.isActiveForStudent(student.id())) {
+            BigDecimal referralPrice = properties.getReferralPrice();
+            candidates.add(new PriceCandidate(
+                    referralPrice,
+                    "REFERRAL",
+                    "Реферальная цена " + formatMoney(referralPrice)
             ));
         }
 

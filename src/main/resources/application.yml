@@ -13,6 +13,7 @@ spring:
 
 pricing:
   base-price: 2000.00
+  trial-price: 1000.00
   multi-subject-price: 1800.00
   referral-price: 1800.00
 

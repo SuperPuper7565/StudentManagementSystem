@@ -7,6 +7,8 @@ import org.example.domain.repository.BookingRepository;
 import org.example.domain.repository.LessonSlotRepository;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+
 @Service
 @RequiredArgsConstructor
 public class CancellationService {
@@ -21,6 +23,10 @@ public class CancellationService {
 
         if (booking.isCancelled()) {
             throw new IllegalStateException("Запись уже отменена");
+        }
+
+        if (booking.isTrial() && !booking.getSlot().getStartTime().isAfter(LocalDateTime.now())) {
+            throw new IllegalStateException("Пробное занятие уже началось; отмена невозможна");
         }
 
         booking.setCancelled(true);

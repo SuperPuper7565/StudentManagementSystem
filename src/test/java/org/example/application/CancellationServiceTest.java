@@ -71,6 +71,37 @@ class CancellationServiceTest {
     }
 
     @Test
+    @DisplayName("Будущее пробное занятие можно отменить")
+    void cancelBooking_AllowsFutureTrialCancellation() {
+        activeBooking.setTrial(true);
+        when(bookingRepository.findById(100L)).thenReturn(Optional.of(activeBooking));
+
+        cancellationService.cancelBooking(100L);
+
+        assertThat(activeBooking.isCancelled()).isTrue();
+        assertThat(bookedSlot.isBooked()).isFalse();
+        verify(notificationService, times(1)).notifyBookingCancelled(eq("Ольга"), any());
+    }
+
+    @Test
+    @DisplayName("Пробное занятие после начала урока отменить нельзя")
+    void cancelBooking_ThrowsException_WhenTrialLessonStarted() {
+        activeBooking.setTrial(true);
+        bookedSlot.setStartTime(LocalDateTime.now().minusMinutes(1));
+        when(bookingRepository.findById(100L)).thenReturn(Optional.of(activeBooking));
+
+        assertThatThrownBy(() -> cancellationService.cancelBooking(100L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Пробное занятие уже началось");
+
+        assertThat(activeBooking.isCancelled()).isFalse();
+        assertThat(bookedSlot.isBooked()).isTrue();
+        verify(bookingRepository, never()).save(any());
+        verify(slotRepository, never()).save(any());
+        verify(notificationService, never()).notifyBookingCancelled(any(), any());
+    }
+
+    @Test
     @DisplayName("Ошибка при попытке повторной отмены уже отмененной брони")
     void cancelBooking_ThrowsException_WhenAlreadyCancelled() {
         activeBooking.setCancelled(true);

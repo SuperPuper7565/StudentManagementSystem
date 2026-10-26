@@ -16,6 +16,7 @@ public class Booking {
     private LocalDateTime bookedAt;
     private boolean isCancelled;
     private boolean isAttended;
+    private boolean isTrial;
     private BigDecimal price;
     private String priceDetails;
 }

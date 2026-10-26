@@ -59,7 +59,13 @@ class StudentAdminServiceTest {
             BigDecimal price = student.id() == 1L
                     ? new BigDecimal("1800.00")
                     : new BigDecimal("2000.00");
-            return new PriceQuote(new BigDecimal("2000.00"), price, "Тестовая цена");
+            return new PriceQuote(
+                    new BigDecimal("2000.00"),
+                    price,
+                    false,
+                    List.of("BASE"),
+                    "Тестовая цена"
+            );
         });
 
         List<StudentAdminDTO> result = adminService.getAllStudentsForAdmin();

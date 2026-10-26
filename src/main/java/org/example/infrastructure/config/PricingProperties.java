@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 public class PricingProperties {
 
     private BigDecimal basePrice = new BigDecimal("2000.00");
+    private BigDecimal trialPrice = new BigDecimal("1000.00");
     private BigDecimal multiSubjectPrice = new BigDecimal("1800.00");
     private BigDecimal referralPrice = new BigDecimal("1800.00");
 
@@ -17,6 +18,14 @@ public class PricingProperties {
 
     public void setBasePrice(BigDecimal basePrice) {
         this.basePrice = basePrice;
+    }
+
+    public BigDecimal getTrialPrice() {
+        return trialPrice;
+    }
+
+    public void setTrialPrice(BigDecimal trialPrice) {
+        this.trialPrice = trialPrice;
     }
 
     public BigDecimal getMultiSubjectPrice() {

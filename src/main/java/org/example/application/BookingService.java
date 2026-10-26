@@ -49,6 +49,7 @@ public class BookingService {
                 .bookedAt(LocalDateTime.now())
                 .isCancelled(false)
                 .isAttended(false)
+                .isTrial(quote.trial())
                 .price(quote.finalPrice())
                 .priceDetails(quote.details())
                 .build();

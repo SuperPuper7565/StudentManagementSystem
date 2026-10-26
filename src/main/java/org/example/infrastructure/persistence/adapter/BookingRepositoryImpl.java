@@ -12,6 +12,7 @@ import org.example.infrastructure.persistence.repository.BookingJpaRepository;
 import org.example.infrastructure.persistence.repository.LessonSlotJpaRepository;
 import org.example.infrastructure.persistence.repository.StudentJpaRepository;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -25,6 +26,7 @@ public class BookingRepositoryImpl implements BookingRepository {
     private final LessonSlotJpaRepository slotJpaRepository;
 
     @Override
+    @Transactional
     public Booking save(Booking booking) {
         BookingEntity entity = toEntity(booking);
         BookingEntity saved = bookingJpaRepository.save(entity);
@@ -32,15 +34,27 @@ public class BookingRepositoryImpl implements BookingRepository {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Optional<Booking> findById(Long id) {
         return bookingJpaRepository.findById(id).map(this::toDomain);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<Booking> findByStudentId(Long studentId) {
         return bookingJpaRepository.findByStudentId(studentId).stream()
                 .map(this::toDomain)
                 .toList();
+    }
+
+    @Override
+    public boolean hasActiveTrial(Long studentId) {
+        return bookingJpaRepository.countActiveTrialBookings(studentId) > 0;
+    }
+
+    @Override
+    public boolean hasAttendedLesson(Long studentId) {
+        return bookingJpaRepository.countAttendedBookings(studentId) > 0;
     }
 
     private Booking toDomain(BookingEntity entity) {
@@ -63,6 +77,7 @@ public class BookingRepositoryImpl implements BookingRepository {
                 .bookedAt(entity.getBookedAt())
                 .isCancelled(entity.isCancelled())
                 .isAttended(entity.isAttended())
+                .isTrial(entity.isTrial())
                 .price(entity.getPrice())
                 .priceDetails(entity.getPriceDetails())
                 .build();
@@ -87,6 +102,7 @@ public class BookingRepositoryImpl implements BookingRepository {
         entity.setBookedAt(domain.getBookedAt());
         entity.setCancelled(domain.isCancelled());
         entity.setAttended(domain.isAttended());
+        entity.setTrial(domain.isTrial());
         entity.setPrice(domain.getPrice());
         entity.setPriceDetails(domain.getPriceDetails());
         return entity;

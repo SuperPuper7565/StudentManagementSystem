@@ -34,6 +34,9 @@ public class BookingEntity {
 
     private boolean isAttended;
 
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean isTrial;
+
     @Column(precision = 10, scale = 2)
     private BigDecimal price;
 

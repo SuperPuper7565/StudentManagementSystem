@@ -21,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -76,6 +77,8 @@ class BookingServiceTest {
                 .thenReturn(new PriceQuote(
                         new BigDecimal("2000.00"),
                         new BigDecimal("1800.00"),
+                        false,
+                        List.of("MULTI_SUBJECT"),
                         "Скидка за второй предмет"
                 ));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -85,9 +88,31 @@ class BookingServiceTest {
         assertThat(booking).isNotNull();
         assertThat(booking.getPrice()).isEqualByComparingTo("1800.00");
         assertThat(booking.getPriceDetails()).isEqualTo("Скидка за второй предмет");
+        assertThat(booking.isTrial()).isFalse();
         assertThat(freeSlot.isBooked()).isTrue();
         verify(slotRepository, times(1)).save(freeSlot);
         verify(notificationService, times(1)).notifyBookingCreated(eq("Иван"), any());
+    }
+
+    @Test
+    @DisplayName("Пробное занятие сохраняется в бронировании")
+    void bookLesson_PersistsTrialFlag() {
+        when(studentRepository.findById(1L)).thenReturn(Optional.of(activeStudent));
+        when(slotRepository.findById(10L)).thenReturn(Optional.of(freeSlot));
+        when(pricingService.quote(activeStudent))
+                .thenReturn(new PriceQuote(
+                        new BigDecimal("2000.00"),
+                        new BigDecimal("1000.00"),
+                        true,
+                        List.of("TRIAL"),
+                        "Первое пробное занятие 1 000 ₽"
+                ));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Booking booking = bookingService.bookLesson(1L, 10L);
+
+        assertThat(booking.getPrice()).isEqualByComparingTo("1000.00");
+        assertThat(booking.isTrial()).isTrue();
     }
 
     @Test

@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.application.dto.PriceQuote;
 import org.example.domain.model.Student;
 import org.example.domain.model.StudentPricing;
+import org.example.domain.repository.BookingRepository;
 import org.example.domain.repository.StudentPricingRepository;
 import org.example.domain.repository.StudentRepository;
 import org.example.infrastructure.config.PricingProperties;
@@ -11,6 +12,8 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -19,6 +22,7 @@ public class PricingService {
 
     private final StudentRepository studentRepository;
     private final StudentPricingRepository pricingRepository;
+    private final BookingRepository bookingRepository;
     private final PricingProperties properties;
 
     public BigDecimal defaultPrice() {
@@ -33,22 +37,54 @@ public class PricingService {
 
     public PriceQuote quote(Student student) {
         BigDecimal basePrice = properties.getBasePrice();
-        BigDecimal finalPrice = basePrice;
-        String details = "Базовая цена " + formatMoney(basePrice);
+
+        List<PriceCandidate> candidates = new ArrayList<>();
+        candidates.add(new PriceCandidate(
+                basePrice,
+                "BASE",
+                "Базовая цена " + formatMoney(basePrice)
+        ));
+
+        if (isTrialAvailable(student)) {
+            BigDecimal trialPrice = properties.getTrialPrice();
+            candidates.add(new PriceCandidate(
+                    trialPrice,
+                    "TRIAL",
+                    "Первое пробное занятие " + formatMoney(trialPrice)
+            ));
+        }
 
         Optional<StudentPricing> individual = pricingRepository.findById(student.id());
         if (individual.isPresent()) {
             BigDecimal individualPrice = individual.get().individualPrice();
-            if (individualPrice != null && individualPrice.compareTo(finalPrice) < 0) {
-                finalPrice = individualPrice;
-                details = "Индивидуальная цена " + formatMoney(individualPrice);
+            if (individualPrice != null && individualPrice.signum() > 0) {
+                String details = "Индивидуальная цена " + formatMoney(individualPrice);
                 if (individual.get().reason() != null && !individual.get().reason().isBlank()) {
                     details += " (" + individual.get().reason().trim() + ")";
                 }
+                candidates.add(new PriceCandidate(individualPrice, "INDIVIDUAL", details));
             }
         }
 
-        return new PriceQuote(basePrice, finalPrice, details);
+        PriceCandidate best = candidates.get(0);
+        for (PriceCandidate candidate : candidates) {
+            if (candidate.price().compareTo(best.price()) < 0) {
+                best = candidate;
+            }
+        }
+
+        return new PriceQuote(
+                basePrice,
+                best.price(),
+                "TRIAL".equals(best.rule()),
+                List.of(best.rule()),
+                best.details()
+        );
+    }
+
+    private boolean isTrialAvailable(Student student) {
+        return !bookingRepository.hasActiveTrial(student.id())
+                && !bookingRepository.hasAttendedLesson(student.id());
     }
 
     public void setIndividualPrice(Long studentId, BigDecimal individualPrice, String reason) {
@@ -79,5 +115,8 @@ public class PricingService {
             return normalized.setScale(0).toPlainString() + " ₽";
         }
         return normalized.setScale(2, RoundingMode.HALF_UP).toPlainString() + " ₽";
+    }
+
+    private record PriceCandidate(BigDecimal price, String rule, String details) {
     }
 }

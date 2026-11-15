@@ -35,12 +35,14 @@ class ApiClient:
         base_url: str,
         timeout: float = 10.0,
         transport: httpx.AsyncBaseTransport | None = None,
+        admin_api_key: str = "",
     ) -> None:
         self._client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
             timeout=timeout,
             transport=transport,
         )
+        self._admin_api_key = admin_api_key.strip()
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -73,6 +75,30 @@ class ApiClient:
             except (TypeError, ValueError):
                 continue
         return None
+
+    # ------------------------------------------------------------------ #
+    # Предметы
+    # ------------------------------------------------------------------ #
+    async def get_subjects(self) -> list[dict[str, Any]]:
+        data = await self._request("GET", "/api/v1/subjects")
+        return [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
+
+    async def get_teacher_subjects(self) -> list[dict[str, Any]]:
+        data = await self._request("GET", "/api/v1/teacher/subjects")
+        return [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
+
+    async def set_teacher_subjects(self, subject_codes: list[str]) -> None:
+        await self._request(
+            "PUT",
+            "/api/v1/teacher/subjects",
+            json={"subjectCodes": subject_codes},
+            headers=self._admin_headers(),
+        )
+
+    def _admin_headers(self) -> dict[str, str]:
+        if not self._admin_api_key:
+            return {}
+        return {"X-Admin-Key": self._admin_api_key}
 
     # ------------------------------------------------------------------ #
     # Расписание

@@ -70,7 +70,11 @@ async def main() -> None:
     db = Database(settings.database_path)
     await db.init()
 
-    api = ApiClient(settings.api_base_url, timeout=settings.request_timeout)
+    api = ApiClient(
+        settings.api_base_url,
+        timeout=settings.request_timeout,
+        admin_api_key=settings.admin_api_key,
+    )
     bot = Bot(
         token=settings.bot_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),

@@ -7,7 +7,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -16,6 +15,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -27,13 +27,24 @@ class StudentSubjectServiceTest {
     @Mock
     private StudentRepository studentRepository;
 
-    @InjectMocks
+    @Mock
+    private TeacherSubjectService teacherSubjectService;
+
+    private final SubjectCatalogService subjectCatalogService = new SubjectCatalogService();
+
     private StudentSubjectService subjectService;
 
     private Student student;
 
     @BeforeEach
     void setUp() {
+        subjectService = new StudentSubjectService(
+                subjectRepository,
+                studentRepository,
+                subjectCatalogService,
+                teacherSubjectService
+        );
+        lenient().when(teacherSubjectService.teaches(anyString())).thenReturn(true);
         student = Student.builder()
                 .id(1L)
                 .name("Иван")
@@ -53,10 +64,18 @@ class StudentSubjectServiceTest {
     @Test
     @DisplayName("Основной предмет объединяется с дополнительными без дублей")
     void getSubjects_MergesPrimaryAndStoredSubjects() {
-        when(subjectRepository.findByStudentId(1L)).thenReturn(List.of("Физика"));
+        when(subjectRepository.findByStudentId(1L)).thenReturn(List.of("Информатика"));
 
         assertThat(subjectService.getSubjects(student))
-                .containsExactlyInAnyOrder("Математика", "Физика");
+                .containsExactlyInAnyOrder("Математика", "Информатика");
+    }
+
+    @Test
+    @DisplayName("Неизвестные старые предметы не попадают в список")
+    void getSubjects_IgnoresUnknownLegacySubjects() {
+        when(subjectRepository.findByStudentId(1L)).thenReturn(List.of("Физика"));
+
+        assertThat(subjectService.getSubjects(student)).containsExactly("Математика");
     }
 
     @Test
@@ -66,10 +85,10 @@ class StudentSubjectServiceTest {
         when(subjectRepository.findByStudentId(1L))
                 .thenReturn(List.of(), List.of("Математика"));
 
-        subjectService.addSubject(1L, "  Физика  ");
+        subjectService.addSubject(1L, "  Информатика  ");
 
         verify(subjectRepository).add(1L, "Математика");
-        verify(subjectRepository).add(1L, "Физика");
+        verify(subjectRepository).add(1L, "Информатика");
     }
 
     @Test
@@ -79,6 +98,19 @@ class StudentSubjectServiceTest {
         when(subjectRepository.findByStudentId(1L)).thenReturn(List.of("Математика"));
 
         subjectService.addSubject(1L, "математика");
+
+        verify(subjectRepository, never()).add(anyLong(), anyString());
+    }
+
+    @Test
+    @DisplayName("Нельзя добавить предмет, который не ведёт преподаватель")
+    void addSubject_RejectsSubjectNotTaughtByTeacher() {
+        when(studentRepository.findById(1L)).thenReturn(Optional.of(student));
+        when(teacherSubjectService.teaches("Информатика")).thenReturn(false);
+
+        assertThatThrownBy(() -> subjectService.addSubject(1L, "INFORMATICS"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("не ведёт предмет");
 
         verify(subjectRepository, never()).add(anyLong(), anyString());
     }
@@ -112,9 +144,9 @@ class StudentSubjectServiceTest {
     void removeSubject_RemovesSecondarySubject() {
         when(studentRepository.findById(1L)).thenReturn(Optional.of(student));
 
-        subjectService.removeSubject(1L, "Физика");
+        subjectService.removeSubject(1L, "Информатика");
 
-        verify(subjectRepository).remove(1L, "Физика");
+        verify(subjectRepository).remove(1L, "Информатика");
     }
 
     @Test

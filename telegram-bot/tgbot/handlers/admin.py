@@ -29,6 +29,7 @@ from ..keyboards import (
     attendance_menu,
     back_menu,
     cancel_flow,
+    teacher_subjects_menu,
 )
 from ..states import AdminFlow
 from ..storage import Database
@@ -141,6 +142,118 @@ def build_router(settings: Settings) -> Router:
                 await callback.message.answer(chunk)
             await callback.message.answer(chunks[-1], reply_markup=admin_panel())
         await callback.answer()
+
+    # ------------------------------------------------------------------ #
+    # Предметы преподавателя
+    # ------------------------------------------------------------------ #
+    async def _teacher_subjects_payload(
+        api: ApiClient,
+    ) -> tuple[list[dict], set[str]]:
+        options = await api.get_subjects()
+        selected = {
+            str(item.get("code") or "")
+            for item in await api.get_teacher_subjects()
+            if str(item.get("code") or "").strip()
+        }
+        return options, selected
+
+    def _teacher_subjects_text(options: list[dict], selected: set[str]) -> str:
+        names = [
+            str(option.get("name") or option.get("code"))
+            for option in options
+            if str(option.get("code") or "") in selected
+        ]
+        selected_text = ", ".join(names) if names else "—"
+        return (
+            "📚 <b>Мои предметы</b>\n\n"
+            "Нажмите на предмет, чтобы включить или выключить его. "
+            "Изменения сохраняются сразу.\n\n"
+            f"Сейчас выбрано: <b>{html.escape(selected_text)}</b>"
+        )
+
+    async def _show_teacher_subjects(callback: CallbackQuery, api: ApiClient) -> None:
+        options, selected = await _teacher_subjects_payload(api)
+        await edit_or_send(
+            callback,
+            _teacher_subjects_text(options, selected),
+            teacher_subjects_menu(options, selected),
+        )
+
+    @router.callback_query(F.data == "admin:subjects")
+    async def cb_teacher_subjects(
+        callback: CallbackQuery,
+        state: FSMContext,
+        api: ApiClient,
+    ) -> None:
+        await state.clear()
+        try:
+            await _show_teacher_subjects(callback, api)
+        except (ApiError, ApiUnavailableError) as exc:
+            await callback.answer("Не удалось загрузить предметы", show_alert=True)
+            await edit_or_send(
+                callback,
+                f"⚠️ {html.escape(str(getattr(exc, 'message', exc)))}",
+                admin_panel(),
+            )
+            return
+        await callback.answer()
+
+    @router.callback_query(F.data.startswith("tsubj:"))
+    async def cb_toggle_teacher_subject(
+        callback: CallbackQuery,
+        state: FSMContext,
+        api: ApiClient,
+    ) -> None:
+        await state.clear()
+        code = (callback.data or "").split(":", 1)[1]
+
+        try:
+            options, selected = await _teacher_subjects_payload(api)
+        except (ApiError, ApiUnavailableError) as exc:
+            await callback.answer(
+                f"Не удалось загрузить предметы: {str(getattr(exc, 'message', exc))}"[:200],
+                show_alert=True,
+            )
+            return
+
+        known_codes = {str(option.get("code") or "") for option in options}
+        if code not in known_codes:
+            await callback.answer("Неизвестный предмет.", show_alert=True)
+            return
+
+        if code in selected:
+            if len(selected) <= 1:
+                await callback.answer(
+                    "Должен остаться хотя бы один предмет.",
+                    show_alert=True,
+                )
+                return
+            selected.remove(code)
+        else:
+            selected.add(code)
+
+        try:
+            await api.set_teacher_subjects(sorted(selected))
+        except ApiError as exc:
+            await callback.answer(
+                f"Не удалось сохранить: {exc.message}"[:200],
+                show_alert=True,
+            )
+            return
+        except ApiUnavailableError:
+            await callback.answer("Сервис недоступен", show_alert=True)
+            return
+
+        try:
+            await _show_teacher_subjects(callback, api)
+        except (ApiError, ApiUnavailableError) as exc:
+            await callback.answer(
+                f"Сохранено, но не удалось обновить список: "
+                f"{str(getattr(exc, 'message', exc))}"[:200],
+                show_alert=True,
+            )
+            return
+        await callback.answer("Сохранено")
 
     # ------------------------------------------------------------------ #
     # Посещаемость

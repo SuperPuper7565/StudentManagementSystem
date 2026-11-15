@@ -4,7 +4,6 @@ import org.example.application.dto.PriceQuote;
 import org.example.application.dto.StudentAdminDTO;
 import org.example.domain.model.LessonFormat;
 import org.example.domain.model.Student;
-import org.example.domain.model.StudyGoal;
 import org.example.domain.repository.StudentRepository;
 import org.example.domain.status.Active;
 import org.example.domain.status.Graduated;
@@ -45,14 +44,14 @@ class StudentAdminServiceTest {
     @DisplayName("Получение списка студентов для админки с ценой из PricingService")
     void getAllStudentsForAdmin_Success() {
         Student student1 = Student.builder()
-                .id(1L).name("Алексей").surname("Смирнов").subject("Физика").grade(11)
-                .goal(StudyGoal.EGE)
+                .id(1L).name("Алексей").surname("Смирнов").subject("Математика").grade(11)
+                .goal("Подготовка к ЕГЭ")
                 .status(new Active(LessonFormat.OFFLINE))
                 .build();
 
         Student student2 = Student.builder()
-                .id(2L).name("Елена").surname("Попова").subject("Математика").grade(9)
-                .goal(StudyGoal.OTHER)
+                .id(2L).name("Елена").surname("Попова").subject("Информатика").grade(9)
+                .goal("Повышение успеваемости")
                 .status(new Paused("Каникулы", LocalDate.now(), LocalDate.now().plusDays(14)))
                 .build();
 
@@ -79,7 +78,7 @@ class StudentAdminServiceTest {
 
         assertThat(result).hasSize(2);
         assertThat(result.get(0).statusDescription()).contains("Активен", "OFFLINE");
-        assertThat(result.get(0).subjects()).containsExactly("Физика");
+        assertThat(result.get(0).subjects()).containsExactly("Математика");
         assertThat(result.get(0).lessonPrice()).isEqualByComparingTo("1800.00");
         assertThat(result.get(0).priceDetails()).isEqualTo("Тестовая цена");
         assertThat(result.get(1).statusDescription()).contains("На паузе", "Каникулы");

@@ -27,9 +27,9 @@ def test_register_student_posts_payload():
                 {
                     "firstName": "Иван",
                     "lastName": "Петров",
-                    "subject": "Математика",
+                    "subjects": ["MATH", "INFORMATICS"],
                     "grade": 9,
-                    "goal": "OGE",
+                    "goal": "Подготовка к ЕГЭ",
                     "lessonFormat": "ONLINE",
                 }
             )
@@ -41,7 +41,8 @@ def test_register_student_posts_payload():
     assert result["id"] == 7
     assert captured["method"] == "POST"
     assert captured["path"] == "/api/v1/students"
-    assert captured["payload"]["goal"] == "OGE"
+    assert captured["payload"]["subjects"] == ["MATH", "INFORMATICS"]
+    assert captured["payload"]["goal"] == "Подготовка к ЕГЭ"
     assert "lessonPrice" not in captured["payload"]
 
 
@@ -76,7 +77,7 @@ def test_get_student_subjects():
     def handler(request: httpx.Request) -> httpx.Response:
         captured["method"] = request.method
         captured["path"] = request.url.path
-        return httpx.Response(200, json=["Математика", "Физика"])
+        return httpx.Response(200, json=["Математика", "Информатика"])
 
     async def scenario():
         api = ApiClient("http://backend", transport=httpx.MockTransport(handler))
@@ -89,7 +90,65 @@ def test_get_student_subjects():
 
     assert captured["method"] == "GET"
     assert captured["path"] == "/api/v1/students/5/subjects"
-    assert result == ["Математика", "Физика"]
+    assert result == ["Математика", "Информатика"]
+
+
+def test_get_subjects_returns_catalog():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["path"] = request.url.path
+        return httpx.Response(
+            200,
+            json=[
+                {"code": "MATH", "name": "Математика"},
+                {"code": "INFORMATICS", "name": "Информатика"},
+            ],
+        )
+
+    async def scenario():
+        api = ApiClient("http://backend", transport=httpx.MockTransport(handler))
+        try:
+            return await api.get_subjects()
+        finally:
+            await api.aclose()
+
+    result = _run(scenario())
+
+    assert captured["method"] == "GET"
+    assert captured["path"] == "/api/v1/subjects"
+    assert [item["code"] for item in result] == ["MATH", "INFORMATICS"]
+
+
+def test_set_teacher_subjects_sends_admin_key():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["path"] = request.url.path
+        captured["admin_key"] = request.headers.get("X-Admin-Key")
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(204)
+
+    async def scenario():
+        api = ApiClient(
+            "http://backend",
+            transport=httpx.MockTransport(handler),
+            admin_api_key="secret",
+        )
+        try:
+            return await api.set_teacher_subjects(["MATH"])
+        finally:
+            await api.aclose()
+
+    result = _run(scenario())
+
+    assert result is None
+    assert captured["method"] == "PUT"
+    assert captured["path"] == "/api/v1/teacher/subjects"
+    assert captured["admin_key"] == "secret"
+    assert captured["payload"] == {"subjectCodes": ["MATH"]}
 
 
 def test_book_lesson_sends_query_params():

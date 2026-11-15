@@ -42,7 +42,12 @@ def main_menu(is_admin: bool, registered: bool) -> InlineKeyboardMarkup:
         rows.append([Button(text="ℹ️ Помощь", callback_data="help")])
 
     if is_admin:
-        rows.append([Button(text="➕ Создать слот", callback_data="admin:slot")])
+        rows.append(
+            [
+                Button(text="➕ Создать слот", callback_data="admin:slot"),
+                Button(text="📚 Мои предметы", callback_data="admin:subjects"),
+            ]
+        )
         rows.append(
             [
                 Button(text="👥 Ученики", callback_data="admin:students"),
@@ -71,15 +76,30 @@ def cancel_flow() -> InlineKeyboardMarkup:
     return _kb([Button(text="✖️ Отмена", callback_data="menu")])
 
 
-def goals_menu() -> InlineKeyboardMarkup:
+def goal_skip_menu() -> InlineKeyboardMarkup:
     return _kb(
-        [
-            Button(text="ОГЭ", callback_data="goal:OGE"),
-            Button(text="ЕГЭ", callback_data="goal:EGE"),
-            Button(text="Другое / успеваемость", callback_data="goal:OTHER"),
-        ],
+        [Button(text="⏭ Пропустить", callback_data="goal:skip")],
         [Button(text="✖️ Отмена", callback_data="menu")],
     )
+
+
+def registration_subjects_menu(
+    options: list[dict[str, Any]],
+    selected: set[str],
+) -> InlineKeyboardMarkup:
+    rows: list[list[Button]] = []
+    for option in options:
+        code = str(option.get("code") or "").strip()
+        if not code:
+            continue
+        name = str(option.get("name") or code)
+        mark = "✅" if code in selected else "▫️"
+        rows.append(
+            [Button(text=f"{mark} {name}", callback_data=f"regsubj:{code}")]
+        )
+    rows.append([Button(text="✅ Готово", callback_data="regsubj:done")])
+    rows.append([Button(text="✖️ Отмена", callback_data="menu")])
+    return _kb(*rows)
 
 
 def formats_menu() -> InlineKeyboardMarkup:
@@ -206,13 +226,34 @@ def profile_menu() -> InlineKeyboardMarkup:
 
 def admin_panel() -> InlineKeyboardMarkup:
     return _kb(
-        [Button(text="➕ Создать слот", callback_data="admin:slot")],
+        [
+            Button(text="➕ Создать слот", callback_data="admin:slot"),
+            Button(text="📚 Мои предметы", callback_data="admin:subjects"),
+        ],
         [
             Button(text="👥 Ученики", callback_data="admin:students"),
             Button(text="✅ Посещаемость", callback_data="admin:attendance"),
         ],
         [Button(text="🏠 В меню", callback_data="menu")],
     )
+
+
+def teacher_subjects_menu(
+    options: list[dict[str, Any]],
+    selected: set[str],
+) -> InlineKeyboardMarkup:
+    rows: list[list[Button]] = []
+    for option in options:
+        code = str(option.get("code") or "").strip()
+        if not code:
+            continue
+        name = str(option.get("name") or code)
+        mark = "✅" if code in selected else "▫️"
+        rows.append(
+            [Button(text=f"{mark} {name}", callback_data=f"tsubj:{code}")]
+        )
+    rows.append([Button(text="🏠 В меню", callback_data="menu")])
+    return _kb(*rows)
 
 
 def after_slot_created() -> InlineKeyboardMarkup:

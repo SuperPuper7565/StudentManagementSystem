@@ -24,6 +24,8 @@ public class BookingService {
     private final NotificationService notificationService;
     private final PricingService pricingService;
     private final StudentSubjectService subjectService;
+    private final SubjectCatalogService subjectCatalogService;
+    private final TeacherSubjectService teacherSubjectService;
 
     public Booking bookLesson(Long studentId, Long slotId, String subject) {
         Student student = studentRepository.findById(studentId)
@@ -44,14 +46,19 @@ public class BookingService {
         if (requestedSubject.isEmpty()) {
             throw new IllegalArgumentException("Предмет не указан");
         }
+        String requestedCanonical = subjectCatalogService.canonicalName(requestedSubject);
 
         List<String> studentSubjects = subjectService.getSubjects(student);
         String canonicalSubject = studentSubjects.stream()
-                .filter(existing -> existing.equalsIgnoreCase(requestedSubject))
+                .filter(existing -> existing.equalsIgnoreCase(requestedCanonical))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException(
-                        "У ученика нет предмета: " + requestedSubject
+                        "У ученика нет предмета: " + requestedCanonical
                 ));
+
+        if (!teacherSubjectService.teaches(canonicalSubject)) {
+            throw new IllegalArgumentException("Преподаватель не ведёт предмет: " + canonicalSubject);
+        }
 
         PriceQuote quote = pricingService.quote(student);
 

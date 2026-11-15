@@ -7,17 +7,18 @@ import org.example.domain.repository.StudentSubjectRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 public class StudentSubjectService {
 
-    private static final int MAX_SUBJECT_LENGTH = 80;
-
     private final StudentSubjectRepository subjectRepository;
     private final StudentRepository studentRepository;
+    private final SubjectCatalogService subjectCatalogService;
+    private final TeacherSubjectService teacherSubjectService;
 
     public List<String> getSubjects(Long studentId) {
         Student student = studentRepository.findById(studentId)
@@ -26,13 +27,12 @@ public class StudentSubjectService {
     }
 
     public List<String> getSubjects(Student student) {
-        List<String> subjects = new ArrayList<>(subjectRepository.findByStudentId(student.id()));
-        String primarySubject = normalizeOrNull(student.subject());
+        LinkedHashSet<String> subjects = new LinkedHashSet<>();
 
-        if (primarySubject != null && subjects.stream()
-                .noneMatch(subject -> subject.equalsIgnoreCase(primarySubject))) {
-            subjects.add(primarySubject);
+        for (String stored : subjectRepository.findByStudentId(student.id())) {
+            subjectCatalogService.canonicalNameIfKnown(stored).ifPresent(subjects::add);
         }
+        subjectCatalogService.canonicalNameIfKnown(student.subject()).ifPresent(subjects::add);
 
         return subjects.stream()
                 .sorted(String.CASE_INSENSITIVE_ORDER)
@@ -44,10 +44,15 @@ public class StudentSubjectService {
         Student student = studentRepository.findById(studentId)
                 .orElseThrow(() -> new IllegalArgumentException("Студент не найден: " + studentId));
 
-        String normalized = normalize(subject);
+        String normalized = subjectCatalogService.canonicalName(subject);
+        if (!teacherSubjectService.teaches(normalized)) {
+            throw new IllegalArgumentException("Преподаватель не ведёт предмет: " + normalized);
+        }
         ensurePrimarySubject(student);
 
         boolean alreadyExists = subjectRepository.findByStudentId(studentId).stream()
+                .map(subjectCatalogService::canonicalNameIfKnown)
+                .flatMap(Optional::stream)
                 .anyMatch(existing -> existing.equalsIgnoreCase(normalized));
         if (!alreadyExists) {
             subjectRepository.add(studentId, normalized);
@@ -59,8 +64,8 @@ public class StudentSubjectService {
         Student student = studentRepository.findById(studentId)
                 .orElseThrow(() -> new IllegalArgumentException("Студент не найден: " + studentId));
 
-        String normalized = normalize(subject);
-        String primarySubject = normalizeOrNull(student.subject());
+        String normalized = subjectCatalogService.canonicalName(subject);
+        String primarySubject = subjectCatalogService.canonicalNameIfKnown(student.subject()).orElse(null);
         if (primarySubject != null && primarySubject.equalsIgnoreCase(normalized)) {
             throw new IllegalStateException("Нельзя удалить основной предмет ученика");
         }
@@ -69,36 +74,17 @@ public class StudentSubjectService {
     }
 
     private void ensurePrimarySubject(Student student) {
-        String primarySubject = normalizeOrNull(student.subject());
+        String primarySubject = subjectCatalogService.canonicalNameIfKnown(student.subject()).orElse(null);
         if (primarySubject == null) {
             return;
         }
 
         boolean alreadyStored = subjectRepository.findByStudentId(student.id()).stream()
+                .map(subjectCatalogService::canonicalNameIfKnown)
+                .flatMap(Optional::stream)
                 .anyMatch(existing -> existing.equalsIgnoreCase(primarySubject));
         if (!alreadyStored) {
             subjectRepository.add(student.id(), primarySubject);
         }
-    }
-
-    private String normalize(String subject) {
-        String normalized = normalizeOrNull(subject);
-        if (normalized == null) {
-            throw new IllegalArgumentException("Предмет не может быть пустым");
-        }
-        if (normalized.length() > MAX_SUBJECT_LENGTH) {
-            throw new IllegalArgumentException(
-                    "Предмет слишком длинный (максимум " + MAX_SUBJECT_LENGTH + " символов)"
-            );
-        }
-        return normalized;
-    }
-
-    private String normalizeOrNull(String subject) {
-        if (subject == null) {
-            return null;
-        }
-        String normalized = subject.trim();
-        return normalized.isEmpty() ? null : normalized;
     }
 }

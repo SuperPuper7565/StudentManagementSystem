@@ -47,7 +47,7 @@ public class StudentAdminService {
                 student.subject(),
                 subjectService.getSubjects(student),
                 student.grade(),
-                student.goal() != null ? student.goal().name() : "Не указана",
+                student.goal() != null && !student.goal().isBlank() ? student.goal() : "Не указана",
                 statusDesc,
                 quote.finalPrice(),
                 quote.details()

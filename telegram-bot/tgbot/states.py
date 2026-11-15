@@ -6,7 +6,7 @@ from aiogram.fsm.state import State, StatesGroup
 class Registration(StatesGroup):
     first_name = State()
     last_name = State()
-    subject = State()
+    subjects = State()
     grade = State()
     goal = State()
     lesson_format = State()

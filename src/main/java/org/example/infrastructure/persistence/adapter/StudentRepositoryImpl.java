@@ -3,7 +3,6 @@ package org.example.infrastructure.persistence.adapter;
 import lombok.RequiredArgsConstructor;
 import org.example.domain.model.LessonFormat;
 import org.example.domain.model.Student;
-import org.example.domain.model.StudyGoal;
 import org.example.domain.repository.StudentRepository;
 import org.example.domain.status.*;
 import org.example.infrastructure.persistence.entity.StudentEntity;
@@ -61,7 +60,7 @@ public class StudentRepositoryImpl implements StudentRepository {
                 .surname(entity.getLastName())
                 .subject(entity.getSubject())
                 .grade(entity.getGrade() != null ? entity.getGrade() : 0)
-                .goal(entity.getGoal() != null ? StudyGoal.valueOf(entity.getGoal()) : null)
+                .goal(entity.getGoal())
                 .status(status)
                 .build();
     }
@@ -75,9 +74,7 @@ public class StudentRepositoryImpl implements StudentRepository {
         entity.setLastName(domain.surname());
         entity.setSubject(domain.subject());
         entity.setGrade(domain.grade());
-        if (domain.goal() != null) {
-            entity.setGoal(domain.goal().name());
-        }
+        entity.setGoal(domain.goal());
         if (domain.status() != null) {
             applyStatusToEntity(domain.status(), entity);
         }

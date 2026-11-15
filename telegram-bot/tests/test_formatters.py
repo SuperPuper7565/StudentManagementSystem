@@ -8,6 +8,7 @@ from tgbot.formatters import (
     clean_text,
     format_booking_line,
     format_datetime,
+    format_goal,
     format_price,
     format_student_card,
     format_time_range,
@@ -17,6 +18,13 @@ from tgbot.formatters import (
     parse_slot_datetime,
     slot_button_text,
 )
+
+
+def test_format_goal_supports_free_text_and_legacy_values():
+    assert format_goal(None) == "не указана"
+    assert format_goal("") == "не указана"
+    assert format_goal("Подготовка к ЕГЭ") == "Подготовка к ЕГЭ"
+    assert format_goal("EGE") == "ЕГЭ"
 
 
 def test_parse_slot_datetime_with_year():

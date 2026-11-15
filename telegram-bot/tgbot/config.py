@@ -44,6 +44,7 @@ class Settings:
     api_base_url: str
     admin_ids: frozenset[int]
     database_path: Path
+    admin_api_key: str = ""
     request_timeout: float = 10.0
     log_level: str = "INFO"
 
@@ -73,6 +74,7 @@ class Settings:
             api_base_url=base_url,
             admin_ids=_parse_admin_ids(os.getenv("ADMIN_IDS", "")),
             database_path=database_path,
+            admin_api_key=os.getenv("ADMIN_API_KEY", "").strip(),
             request_timeout=_parse_timeout(os.getenv("REQUEST_TIMEOUT", "10")),
             log_level=os.getenv("LOG_LEVEL", "INFO").strip().upper() or "INFO",
         )

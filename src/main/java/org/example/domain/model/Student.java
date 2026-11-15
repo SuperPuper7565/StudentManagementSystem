@@ -10,7 +10,7 @@ public record Student(
         String surname,
         String subject,
         int grade,
-        StudyGoal goal,
+        String goal,
         StudentStatus status
 ) {
 }

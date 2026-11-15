@@ -50,6 +50,12 @@ class BookingServiceTest {
     @Mock
     private StudentSubjectService subjectService;
 
+    @Mock
+    private SubjectCatalogService subjectCatalogService;
+
+    @Mock
+    private TeacherSubjectService teacherSubjectService;
+
     @InjectMocks
     private BookingService bookingService;
 
@@ -70,6 +76,10 @@ class BookingServiceTest {
         freeSlot.setId(10L);
         freeSlot.setStartTime(LocalDateTime.now().plusDays(1));
         freeSlot.setBooked(false);
+
+        lenient().when(subjectCatalogService.canonicalName(anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(teacherSubjectService.teaches(anyString())).thenReturn(true);
     }
 
     @Test
@@ -132,6 +142,22 @@ class BookingServiceTest {
         assertThatThrownBy(() -> bookingService.bookLesson(1L, 10L, "Физика"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("нет предмета");
+
+        assertThat(freeSlot.isBooked()).isFalse();
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Нельзя записаться на предмет, который не ведёт преподаватель")
+    void bookLesson_ThrowsException_WhenTeacherDoesNotTeachSubject() {
+        when(studentRepository.findById(1L)).thenReturn(Optional.of(activeStudent));
+        when(slotRepository.findById(10L)).thenReturn(Optional.of(freeSlot));
+        when(subjectService.getSubjects(activeStudent)).thenReturn(List.of("Математика"));
+        when(teacherSubjectService.teaches("Математика")).thenReturn(false);
+
+        assertThatThrownBy(() -> bookingService.bookLesson(1L, 10L, "Математика"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("не ведёт предмет");
 
         assertThat(freeSlot.isBooked()).isFalse();
         verify(bookingRepository, never()).save(any());

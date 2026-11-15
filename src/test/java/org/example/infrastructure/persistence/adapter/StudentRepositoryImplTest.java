@@ -2,7 +2,6 @@ package org.example.infrastructure.persistence.adapter;
 
 import org.example.domain.model.LessonFormat;
 import org.example.domain.model.Student;
-import org.example.domain.model.StudyGoal;
 import org.example.domain.status.Active;
 import org.example.infrastructure.persistence.repository.StudentJpaRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -35,7 +34,7 @@ class StudentRepositoryImplTest {
                 .surname("Иванов")
                 .subject("Математика")
                 .grade(11)
-                .goal(StudyGoal.EGE)
+                .goal("Подготовка к ЕГЭ")
                 .status(new Active(LessonFormat.ONLINE))
                 .build();
 

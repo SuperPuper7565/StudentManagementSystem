@@ -89,6 +89,14 @@ def test_slot_button_text_uses_weekday():
     assert slot_button_text(slot, now=datetime(2026, 10, 24)) == "Пн 26.10 · 14:00"
 
 
+def test_slot_button_text_includes_format():
+    slot = {"startTime": "2026-10-26T14:00:00", "format": "ONLINE"}
+    assert (
+        slot_button_text(slot, now=datetime(2026, 10, 24))
+        == "Пн 26.10 · 14:00 · Онлайн"
+    )
+
+
 def test_slot_booked_accepts_both_names():
     assert is_slot_booked({"booked": True})
     assert is_slot_booked({"isBooked": True})
@@ -107,7 +115,7 @@ def test_format_student_card_escapes_html():
             "id": 3,
             "fullName": "<Иван>",
             "subject": "Математика",
-            "subjects": ["Математика", "Физика"],
+            "subjects": ["Математика", "Информатика"],
             "grade": 9,
             "goalDescription": "EGE",
             "statusDescription": "Активен (ONLINE)",
@@ -120,21 +128,23 @@ def test_format_student_card_escapes_html():
     assert "ЕГЭ" in card
     assert "1 500 ₽" in card
     assert "Индивидуальная цена" in card
-    assert "Математика, Физика" in card
+    assert "Математика, Информатика" in card
 
 
-def test_format_booking_line_includes_subject():
+def test_format_booking_line_includes_subject_and_format():
     line = format_booking_line(
         {
             "booking_id": 7,
             "start_time": "2026-10-25T14:00:00",
             "end_time": "2026-10-25T15:30:00",
-            "subject": "Физика",
+            "subject": "Информатика",
+            "format": "OFFLINE",
             "status": "active",
         }
     )
     assert "Запись #7" in line
-    assert "Физика" in line
+    assert "Информатика" in line
+    assert "Офлайн" in line
 
 
 def test_chunk_text_keeps_content():

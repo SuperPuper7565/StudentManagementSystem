@@ -33,6 +33,7 @@ def test_booking_lifecycle(tmp_path):
             "id": 7,
             "startTime": "2026-10-25T14:00:00",
             "endTime": "2026-10-25T15:30:00",
+            "format": "ONLINE",
         },
     }
 
@@ -45,6 +46,7 @@ def test_booking_lifecycle(tmp_path):
         assert rows[0]["booking_id"] == 42
         assert rows[0]["student_id"] == 3
         assert rows[0]["subject"] == "Математика"
+        assert rows[0]["format"] == "ONLINE"
         assert rows[0]["status"] == "active"
 
         await db.set_attendance(42, True)
@@ -58,7 +60,7 @@ def test_booking_lifecycle(tmp_path):
     _run(scenario())
 
 
-def test_init_adds_subject_column_to_existing_database(tmp_path):
+def test_init_adds_new_columns_to_existing_database(tmp_path):
     path = tmp_path / "old.sqlite3"
 
     async def scenario():
@@ -87,6 +89,7 @@ def test_init_adds_subject_column_to_existing_database(tmp_path):
                 columns = {row[1] for row in await cursor.fetchall()}
 
         assert "subject" in columns
+        assert "format" in columns
 
     _run(scenario())
 

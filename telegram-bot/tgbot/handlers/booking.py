@@ -13,8 +13,10 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from ..api import ApiClient, ApiError, ApiUnavailableError
+from ..config import Settings
 from ..formatters import (
     format_booking_line,
+    format_lesson_format,
     format_price,
     format_time_range,
     is_slot_booked,
@@ -44,6 +46,14 @@ def _total_pages(count: int) -> int:
     return max(1, math.ceil(count / PAGE_SIZE))
 
 
+async def _notify_tutors(bot, admin_ids, text: str) -> None:
+    for admin_id in admin_ids:
+        try:
+            await bot.send_message(admin_id, text)
+        except Exception:
+            logger.exception("Не удалось отправить уведомление преподавателю %s", admin_id)
+
+
 async def _available_slots(api: ApiClient) -> list[dict]:
     slots = [slot for slot in await api.get_available_slots() if not is_slot_booked(slot)]
     slots.sort(key=lambda slot: parse_iso_datetime(slot.get("startTime")) or datetime.max)
@@ -62,7 +72,10 @@ async def _student_price_text(
         quote = await api.get_student_price(student_id)
     except (ApiError, ApiUnavailableError):
         return None
-    return format_price(quote.get("finalPrice"))
+    price = format_price(quote.get("finalPrice"))
+    if quote.get("trial"):
+        price += " · пробное занятие"
+    return price
 
 
 def _slots_view(
@@ -214,9 +227,16 @@ async def cb_book(
 
     price_text = await _student_price_text(api, db, callback.from_user.id)
     time_range = format_time_range(slot.get("startTime"), slot.get("endTime"))
+    slot_format = format_lesson_format(slot.get("format"))
+    format_line = (
+        f"🎓 Формат: <b>{html.escape(slot_format)}</b>\n"
+        if slot_format != "—"
+        else ""
+    )
     text = (
         "📚 <b>Выберите предмет</b>\n\n"
         f"📅 <b>{html.escape(time_range)}</b>\n"
+        f"{format_line}"
     )
     if price_text and price_text != "—":
         text += f"\n💰 Стоимость занятия: <b>{html.escape(price_text)}</b>\n"
@@ -231,6 +251,7 @@ async def cb_book_subject(
     callback: CallbackQuery,
     api: ApiClient,
     db: Database,
+    settings: Settings,
 ) -> None:
     parts = (callback.data or "").split(":")
     if len(parts) != 3:
@@ -322,19 +343,50 @@ async def cb_book_subject(
     slot_data = booking.get("slot") or slot
     time_range = format_time_range(slot_data.get("startTime"), slot_data.get("endTime"))
     price = format_price(booking.get("price"))
-    price_line = f"💰 Стоимость: <b>{price}</b>\n" if price != "—" else ""
+    trial_note = " · пробное занятие" if booking.get("trial") else ""
+    price_line = (
+        f"💰 Стоимость: <b>{price}</b>{trial_note}\n" if price != "—" else ""
+    )
     booked_subject = html.escape(str(booking.get("subject") or subject))
+    slot_format = format_lesson_format(slot_data.get("format"))
+    format_line = (
+        f"🎓 Формат: <b>{html.escape(slot_format)}</b>\n"
+        if slot_format != "—"
+        else ""
+    )
 
     await edit_or_send(
         callback,
         f"✅ <b>Вы записаны!</b>\n\n"
         f"📅 <b>{time_range}</b>\n"
         f"📚 Предмет: <b>{booked_subject}</b>\n"
+        f"{format_line}"
         f"🎟 Номер записи: <b>{booking_id}</b>\n"
         f"{price_line}"
         f"👤 ID ученика: {student_id}\n\n"
         f"Отменить запись можно в разделе «Мои записи».",
         after_booking(),
+    )
+
+    student = booking.get("student") or {}
+    student_name = " ".join(
+        part
+        for part in (
+            str(student.get("name") or "").strip(),
+            str(student.get("surname") or "").strip(),
+        )
+        if part
+    ) or f"ID {student_id}"
+    await _notify_tutors(
+        callback.bot,
+        settings.admin_ids,
+        f"🔔 <b>Новая запись</b>\n\n"
+        f"👤 {html.escape(student_name)} (ID {student_id})\n"
+        f"📅 {time_range}\n"
+        f"📚 {booked_subject}\n"
+        f"{format_line}"
+        f"💰 {price}{trial_note}\n"
+        f"🎟 #{booking_id}",
     )
     await callback.answer("Готово!")
 
@@ -407,6 +459,7 @@ async def cb_cancel_confirm(
     callback: CallbackQuery,
     api: ApiClient,
     db: Database,
+    settings: Settings,
 ) -> None:
     try:
         booking_id = int((callback.data or "").split(":", 1)[1])
@@ -439,6 +492,43 @@ async def cb_cancel_confirm(
         return
 
     await db.mark_cancelled(booking_id)
+
+    student_id = row.get("student_id")
+    student_name = f"ID {student_id}"
+    if student_id is not None:
+        try:
+            student = await api.find_student(int(student_id))
+            if student:
+                student_name = " ".join(
+                    part
+                    for part in (
+                        str(student.get("name") or "").strip(),
+                        str(student.get("surname") or "").strip(),
+                    )
+                    if part
+                ) or student_name
+        except (ApiError, ApiUnavailableError):
+            pass
+
+    subject = str(row.get("subject") or "").strip()
+    subject_line = f"📚 {html.escape(subject)}\n" if subject else ""
+    cancel_format = format_lesson_format(row.get("format"))
+    format_line = (
+        f"🎓 Формат: <b>{html.escape(cancel_format)}</b>\n"
+        if cancel_format != "—"
+        else ""
+    )
+    await _notify_tutors(
+        callback.bot,
+        settings.admin_ids,
+        f"🔔 <b>Отмена записи</b>\n\n"
+        f"👤 {html.escape(student_name)} (ID {student_id})\n"
+        f"📅 {format_time_range(row.get('start_time'), row.get('end_time'))}\n"
+        f"{subject_line}"
+        f"{format_line}"
+        f"🎟 #{booking_id}",
+    )
+
     await edit_or_send(
         callback,
         f"✅ Запись <b>#{booking_id}</b> отменена.\n\n"

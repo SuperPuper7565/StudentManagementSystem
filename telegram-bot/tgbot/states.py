@@ -19,4 +19,5 @@ class LinkStudent(StatesGroup):
 
 class AdminFlow(StatesGroup):
     slot_time = State()
+    slot_format = State()
     attendance_booking_id = State()

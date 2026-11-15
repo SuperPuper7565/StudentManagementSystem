@@ -1,6 +1,7 @@
 package org.example.infrastructure.persistence.adapter;
 
 import org.example.domain.model.Booking;
+import org.example.domain.model.LessonFormat;
 import org.example.domain.model.LessonSlot;
 import org.example.domain.model.Student;
 import org.example.infrastructure.persistence.entity.LessonSlotEntity;
@@ -48,6 +49,7 @@ class BookingRepositoryImplTest {
         slot.setStartTime(LocalDateTime.now().plusDays(1));
         slot.setEndTime(slot.getStartTime().plusMinutes(90));
         slot.setBooked(true);
+        slot.setFormat("OFFLINE");
         slot = slotJpaRepository.save(slot);
 
         Student studentDomain = Student.builder().id(student.getId()).build();
@@ -67,6 +69,7 @@ class BookingRepositoryImplTest {
                 .build());
 
         assertThat(saved.isTrial()).isTrue();
+        assertThat(saved.getSlot().getFormat()).isEqualTo(LessonFormat.OFFLINE);
         assertThat(repository.hasActiveTrial(student.getId())).isTrue();
         assertThat(repository.hasAttendedLesson(student.getId())).isFalse();
 

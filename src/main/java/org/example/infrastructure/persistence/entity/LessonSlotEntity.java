@@ -26,4 +26,7 @@ public class LessonSlotEntity {
 
     @Column(nullable = false)
     private boolean booked;
+
+    @Column(length = 20)
+    private String format;
 }

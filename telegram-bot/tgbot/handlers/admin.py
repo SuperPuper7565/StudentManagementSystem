@@ -18,6 +18,7 @@ from ..filters import IsAdmin, PLAIN_TEXT
 from ..formatters import (
     chunk_text,
     format_datetime,
+    format_lesson_format,
     format_student_card,
     format_time_range,
     parse_slot_datetime,
@@ -29,6 +30,7 @@ from ..keyboards import (
     attendance_menu,
     back_menu,
     cancel_flow,
+    slot_formats_menu,
     teacher_subjects_menu,
 )
 from ..states import AdminFlow
@@ -72,22 +74,72 @@ def build_router(settings: Settings) -> Router:
             await message.answer("⚠️ Время начала должно быть в будущем. Попробуйте снова.")
             return
 
+        await state.update_data(slot_start_time=start_time.isoformat(timespec="seconds"))
+        await state.set_state(AdminFlow.slot_format)
+        await message.answer(
+            f"📅 Время: <b>{start_time:%d.%m.%Y %H:%M}</b>\n\n"
+            "Выберите формат занятия.",
+            reply_markup=slot_formats_menu(),
+        )
+
+    @router.message(AdminFlow.slot_format)
+    async def slot_format_wait(message: Message) -> None:
+        await message.answer("Выберите формат занятия кнопками под сообщением.")
+
+    @router.callback_query(AdminFlow.slot_format, F.data.startswith("slotfmt:"))
+    async def cb_slot_format(
+        callback: CallbackQuery,
+        state: FSMContext,
+        api: ApiClient,
+    ) -> None:
+        lesson_format = (callback.data or "").split(":", 1)[1]
+        if lesson_format not in {"ONLINE", "OFFLINE"}:
+            await callback.answer("Неизвестный формат занятия.", show_alert=True)
+            return
+
+        data = await state.get_data()
+        raw_start = data.get("slot_start_time")
+        if not raw_start:
+            await state.clear()
+            await callback.answer("Время слота потеряно. Начните заново.", show_alert=True)
+            return
+
         try:
-            slot = await api.create_slot(start_time)
+            start_time = datetime.fromisoformat(str(raw_start))
+        except ValueError:
+            await state.clear()
+            await callback.answer("Некорректное время слота. Начните заново.", show_alert=True)
+            return
+
+        try:
+            slot = await api.create_slot(start_time, lesson_format)
         except ApiError as exc:
-            await message.answer(f"⚠️ Не удалось создать слот: {html.escape(exc.message)}")
+            await callback.answer("Не удалось создать слот", show_alert=True)
+            await edit_or_send(
+                callback,
+                f"⚠️ Не удалось создать слот: {html.escape(exc.message)}",
+                slot_formats_menu(),
+            )
             return
         except ApiUnavailableError as exc:
-            await message.answer(f"⚠️ {html.escape(str(exc))}")
+            await callback.answer("Сервис недоступен", show_alert=True)
+            await edit_or_send(
+                callback,
+                f"⚠️ {html.escape(str(exc))}",
+                slot_formats_menu(),
+            )
             return
 
         await state.clear()
-        await message.answer(
+        await edit_or_send(
+            callback,
             f"✅ <b>Слот создан</b>\n\n"
             f"📅 <b>{format_time_range(slot.get('startTime'), slot.get('endTime'))}</b>\n"
+            f"🎓 Формат: <b>{format_lesson_format(slot.get('format') or lesson_format)}</b>\n"
             f"🆔 ID слота: <b>{slot.get('id', '—')}</b>",
-            reply_markup=after_slot_created(),
+            after_slot_created(),
         )
+        await callback.answer("Слот создан")
 
     # ------------------------------------------------------------------ #
     # Ученики

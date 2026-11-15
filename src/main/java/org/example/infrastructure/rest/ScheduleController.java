@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.example.application.ScheduleViewService;
 import org.example.application.SlotManagementService;
+import org.example.domain.model.LessonFormat;
 import org.example.domain.model.LessonSlot;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -26,8 +27,9 @@ public class ScheduleController {
     @PostMapping("/slots")
     @Operation(summary = "Создание нового слота для занятия (90 минут)")
     public ResponseEntity<LessonSlot> createSlot(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime) {
-        LessonSlot slot = slotManagementService.createSlot(startTime);
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
+            @RequestParam(required = false) LessonFormat format) {
+        LessonSlot slot = slotManagementService.createSlot(startTime, format);
         return ResponseEntity.status(HttpStatus.CREATED).body(slot);
     }
 

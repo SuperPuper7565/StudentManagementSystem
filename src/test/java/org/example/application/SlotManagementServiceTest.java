@@ -1,5 +1,6 @@
 package org.example.application;
 
+import org.example.domain.model.LessonFormat;
 import org.example.domain.model.LessonSlot;
 import org.example.domain.repository.LessonSlotRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -38,7 +39,22 @@ class SlotManagementServiceTest {
         assertThat(slot.getStartTime()).isEqualTo(start);
         assertThat(slot.getEndTime()).isEqualTo(start.plusMinutes(90));
         assertThat(slot.isBooked()).isFalse();
+        assertThat(slot.getFormat()).isEqualTo(LessonFormat.ONLINE);
 
         verify(slotRepository, times(1)).save(any(LessonSlot.class));
+    }
+
+    @Test
+    @DisplayName("Создание слота: преподаватель может выбрать офлайн-формат")
+    void createSlot_WithOfflineFormat() {
+        LocalDateTime start = LocalDateTime.now().plusDays(1).withHour(16).withMinute(0).withSecond(0).withNano(0);
+
+        when(slotRepository.save(any(LessonSlot.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        LessonSlot slot = slotManagementService.createSlot(start, LessonFormat.OFFLINE);
+
+        assertThat(slot.getFormat()).isEqualTo(LessonFormat.OFFLINE);
+        verify(slotRepository).save(any(LessonSlot.class));
     }
 }

@@ -1,5 +1,6 @@
 import asyncio
 import json
+from datetime import datetime
 
 import httpx
 import pytest
@@ -149,6 +150,39 @@ def test_set_teacher_subjects_sends_admin_key():
     assert captured["path"] == "/api/v1/teacher/subjects"
     assert captured["admin_key"] == "secret"
     assert captured["payload"] == {"subjectCodes": ["MATH"]}
+
+
+def test_create_slot_sends_format():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["path"] = request.url.path
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(
+            201,
+            json={
+                "id": 11,
+                "startTime": "2026-10-25T14:00:00",
+                "endTime": "2026-10-25T15:30:00",
+                "format": "OFFLINE",
+            },
+        )
+
+    async def scenario():
+        api = ApiClient("http://backend", transport=httpx.MockTransport(handler))
+        try:
+            return await api.create_slot(datetime(2026, 10, 25, 14, 0), "OFFLINE")
+        finally:
+            await api.aclose()
+
+    result = _run(scenario())
+
+    assert result["format"] == "OFFLINE"
+    assert captured["method"] == "POST"
+    assert captured["path"] == "/api/v1/schedule/slots"
+    assert captured["params"]["startTime"] == "2026-10-25T14:00:00"
+    assert captured["params"]["format"] == "OFFLINE"
 
 
 def test_book_lesson_sends_query_params():

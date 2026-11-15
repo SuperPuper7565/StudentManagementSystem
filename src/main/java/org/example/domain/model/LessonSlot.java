@@ -13,6 +13,8 @@ public class LessonSlot {
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private boolean isBooked;
+    @Builder.Default
+    private LessonFormat format = LessonFormat.ONLINE;
 
     public void setStartTime(LocalDateTime startTime) {
         this.startTime = startTime;

@@ -64,13 +64,19 @@ def slot_button_text(slot: dict[str, Any], now: datetime | None = None) -> str:
         return f"Слот #{slot.get('id', '?')}"
     with_year = now is None or start_dt.year != now.year
     date_part = start_dt.strftime("%d.%m.%Y" if with_year else "%d.%m")
-    return f"{WEEKDAYS[start_dt.weekday()]} {date_part} · {start_dt:%H:%M}"
+    lesson_format = format_lesson_format(slot.get("format"))
+    suffix = f" · {lesson_format}" if lesson_format != "—" else ""
+    return f"{WEEKDAYS[start_dt.weekday()]} {date_part} · {start_dt:%H:%M}{suffix}"
 
 
 def format_slot_line(slot: dict[str, Any]) -> str:
     start = slot.get("startTime")
     end = slot.get("endTime")
-    return f"📅 <b>{format_time_range(start, end)}</b>"
+    line = f"📅 <b>{format_time_range(start, end)}</b>"
+    lesson_format = format_lesson_format(slot.get("format"))
+    if lesson_format != "—":
+        line += f"\n🎓 {lesson_format}"
+    return line
 
 
 def format_booking_line(row: dict[str, Any]) -> str:
@@ -79,6 +85,9 @@ def format_booking_line(row: dict[str, Any]) -> str:
     subject = str(row.get("subject") or "").strip()
     if subject:
         line += f"\n📚 {html.escape(subject)}"
+    lesson_format = format_lesson_format(row.get("format"))
+    if lesson_format != "—":
+        line += f"\n🎓 {lesson_format}"
     if row.get("status") == "cancelled":
         line += " <i>(отменена)</i>"
     elif row.get("attended") == 1:

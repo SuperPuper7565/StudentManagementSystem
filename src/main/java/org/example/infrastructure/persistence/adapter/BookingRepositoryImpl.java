@@ -2,6 +2,7 @@ package org.example.infrastructure.persistence.adapter;
 
 import lombok.RequiredArgsConstructor;
 import org.example.domain.model.Booking;
+import org.example.domain.model.LessonFormat;
 import org.example.domain.model.LessonSlot;
 import org.example.domain.model.Student;
 import org.example.domain.repository.BookingRepository;
@@ -79,6 +80,7 @@ public class BookingRepositoryImpl implements BookingRepository {
         slot.setId(entity.getSlot().getId());
         slot.setStartTime(entity.getSlot().getStartTime());
         slot.setBooked(entity.getSlot().isBooked());
+        slot.setFormat(parseFormat(entity.getSlot().getFormat()));
 
         return Booking.builder()
                 .id(entity.getId())
@@ -118,5 +120,16 @@ public class BookingRepositoryImpl implements BookingRepository {
         entity.setPrice(domain.getPrice());
         entity.setPriceDetails(domain.getPriceDetails());
         return entity;
+    }
+
+    private LessonFormat parseFormat(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return LessonFormat.ONLINE;
+        }
+        try {
+            return LessonFormat.valueOf(raw);
+        } catch (IllegalArgumentException ignored) {
+            return LessonFormat.ONLINE;
+        }
     }
 }

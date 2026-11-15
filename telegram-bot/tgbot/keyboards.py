@@ -83,6 +83,16 @@ def goal_skip_menu() -> InlineKeyboardMarkup:
     )
 
 
+def slot_formats_menu() -> InlineKeyboardMarkup:
+    return _kb(
+        [
+            Button(text="💻 Онлайн", callback_data="slotfmt:ONLINE"),
+            Button(text="🏫 Офлайн", callback_data="slotfmt:OFFLINE"),
+        ],
+        [Button(text="✖️ Отмена", callback_data="menu")],
+    )
+
+
 def registration_subjects_menu(
     options: list[dict[str, Any]],
     selected: set[str],

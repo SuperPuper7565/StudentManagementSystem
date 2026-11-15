@@ -103,11 +103,18 @@ class ApiClient:
     # ------------------------------------------------------------------ #
     # Расписание
     # ------------------------------------------------------------------ #
-    async def create_slot(self, start_time: datetime) -> dict[str, Any]:
+    async def create_slot(
+        self,
+        start_time: datetime,
+        lesson_format: str = "ONLINE",
+    ) -> dict[str, Any]:
         return await self._request(
             "POST",
             "/api/v1/schedule/slots",
-            params={"startTime": start_time.isoformat(timespec="seconds")},
+            params={
+                "startTime": start_time.isoformat(timespec="seconds"),
+                "format": lesson_format,
+            },
         )
 
     async def get_available_slots(self) -> list[dict[str, Any]]:

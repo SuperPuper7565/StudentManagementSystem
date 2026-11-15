@@ -1,6 +1,7 @@
 package org.example.infrastructure.persistence.adapter;
 
 import lombok.RequiredArgsConstructor;
+import org.example.domain.model.LessonFormat;
 import org.example.domain.model.LessonSlot;
 import org.example.domain.repository.LessonSlotRepository;
 import org.example.infrastructure.persistence.entity.LessonSlotEntity;
@@ -53,6 +54,7 @@ public class LessonSlotRepositoryImpl implements LessonSlotRepository {
         slot.setId(entity.getId());
         slot.setStartTime(entity.getStartTime());
         slot.setBooked(entity.isBooked());
+        slot.setFormat(parseFormat(entity.getFormat()));
         return slot;
     }
 
@@ -62,6 +64,18 @@ public class LessonSlotRepositoryImpl implements LessonSlotRepository {
         entity.setStartTime(domain.getStartTime());
         entity.setEndTime(domain.getEndTime());
         entity.setBooked(domain.isBooked());
+        entity.setFormat((domain.getFormat() == null ? LessonFormat.ONLINE : domain.getFormat()).name());
         return entity;
+    }
+
+    private LessonFormat parseFormat(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return LessonFormat.ONLINE;
+        }
+        try {
+            return LessonFormat.valueOf(raw);
+        } catch (IllegalArgumentException ignored) {
+            return LessonFormat.ONLINE;
+        }
     }
 }

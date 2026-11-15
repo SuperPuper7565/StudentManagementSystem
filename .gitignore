@@ -4,3 +4,4 @@ target/
 .mvn/
 *.log
 data/
+info.md

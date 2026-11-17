@@ -97,6 +97,38 @@ def format_booking_line(row: dict[str, Any]) -> str:
     return line
 
 
+def format_slot_conflict(payload: dict[str, Any], limit: int = 3) -> str:
+    """Текст ошибки для ответа GET /schedule/slots/overlap."""
+    conflicts = payload.get("conflicts")
+    if not isinstance(conflicts, list):
+        conflicts = []
+
+    time_range = format_time_range(payload.get("startTime"), payload.get("endTime"))
+    lines = [f"⚠️ Время {time_range} пересекается с занятием:"]
+
+    for conflict in conflicts[:limit]:
+        if not isinstance(conflict, dict):
+            continue
+        line = f"📅 {format_time_range(conflict.get('startTime'), conflict.get('endTime'))}"
+        lesson_format = format_lesson_format(conflict.get("format"))
+        if lesson_format != "—":
+            line += f" · 🎓 {lesson_format}"
+        if conflict.get("booked"):
+            line += " · 🎟 уже забронировано"
+        else:
+            line += " · слот уже создан, но свободен"
+        lines.append(line)
+
+    if not conflicts:
+        lines.append("📅 В это время уже есть занятие.")
+
+    if len(conflicts) > limit:
+        lines.append(f"…и ещё {len(conflicts) - limit}.")
+
+    lines.extend(["", "Введите другое время."])
+    return "\n".join(lines)
+
+
 def parse_slot_datetime(text: str, now: datetime | None = None) -> datetime:
     """Разбирает дату/время слота из сообщения пользователя."""
     now = now or datetime.now()

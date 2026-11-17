@@ -117,6 +117,14 @@ class ApiClient:
             },
         )
 
+    async def check_slot_overlap(self, start_time: datetime) -> dict[str, Any]:
+        data = await self._request(
+            "GET",
+            "/api/v1/schedule/slots/overlap",
+            params={"startTime": start_time.isoformat(timespec="seconds")},
+        )
+        return data if isinstance(data, dict) else {}
+
     async def get_available_slots(self) -> list[dict[str, Any]]:
         data = await self._request("GET", "/api/v1/schedule/slots/available")
         return data if isinstance(data, list) else []

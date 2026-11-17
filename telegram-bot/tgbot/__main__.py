@@ -15,7 +15,8 @@ from aiogram.types import BotCommand, ErrorEvent
 
 from .api import ApiClient
 from .config import ConfigError, Settings
-from .handlers import admin, booking, common, fallback, registration
+from .handlers import admin, booking, common, fallback, nav, registration
+from .middlewares import StaleCallbackMiddleware
 from .storage import Database
 
 logger = logging.getLogger(__name__)
@@ -86,6 +87,8 @@ async def main() -> None:
         db=db,
     )
 
+    dispatcher.callback_query.outer_middleware(StaleCallbackMiddleware())
+    dispatcher.include_router(nav.router)
     dispatcher.include_router(common.router)
     dispatcher.include_router(registration.router)
     dispatcher.include_router(booking.router)

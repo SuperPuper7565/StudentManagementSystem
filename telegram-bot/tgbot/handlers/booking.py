@@ -23,16 +23,17 @@ from ..formatters import (
     parse_iso_datetime,
 )
 from ..keyboards import (
-    after_booking,
     back_menu,
     bookings_menu,
     cancel_confirm,
+    main_reply_menu,
+    notification_menu,
     onboarding_menu,
     slots_menu,
     subjects_menu,
 )
 from ..storage import Database
-from ..ui import edit_or_send
+from ..ui import render_screen, send_screen
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +47,10 @@ def _total_pages(count: int) -> int:
     return max(1, math.ceil(count / PAGE_SIZE))
 
 
-async def _notify_tutors(bot, admin_ids, text: str) -> None:
+async def _notify_tutors(bot, admin_ids, text: str, keyboard=None) -> None:
     for admin_id in admin_ids:
         try:
-            await bot.send_message(admin_id, text)
+            await bot.send_message(admin_id, text, reply_markup=keyboard)
         except Exception:
             logger.exception("Не удалось отправить уведомление преподавателю %s", admin_id)
 
@@ -115,18 +116,33 @@ def _slots_view(
 # ---------------------------------------------------------------------- #
 # Свободные слоты
 # ---------------------------------------------------------------------- #
-@router.message(Command("slots"))
-async def cmd_slots(message: Message, state: FSMContext, api: ApiClient, db: Database) -> None:
+async def render_slots(
+    message: Message,
+    state: FSMContext,
+    api: ApiClient,
+    db: Database,
+    telegram_id: int,
+    page: int = 0,
+) -> None:
     await state.clear()
     try:
         slots = await _available_slots(api)
     except (ApiError, ApiUnavailableError) as exc:
-        await message.answer(f"⚠️ {html.escape(str(getattr(exc, 'message', exc)))}")
+        await send_screen(
+            message,
+            f"⚠️ {html.escape(str(getattr(exc, 'message', exc)))}",
+            inline_keyboard=back_menu(),
+        )
         return
 
-    price_text = await _student_price_text(api, db, message.from_user.id)
-    text, keyboard = _slots_view(slots, 0, price_text)
-    await message.answer(text, reply_markup=keyboard)
+    price_text = await _student_price_text(api, db, telegram_id)
+    text, keyboard = _slots_view(slots, page, price_text)
+    await send_screen(message, text, inline_keyboard=keyboard)
+
+
+@router.message(Command("slots"))
+async def cmd_slots(message: Message, state: FSMContext, api: ApiClient, db: Database) -> None:
+    await render_slots(message, state, api, db, message.from_user.id)
 
 
 @router.callback_query(F.data.startswith("slots:"))
@@ -146,16 +162,16 @@ async def cb_slots(
         slots = await _available_slots(api)
     except (ApiError, ApiUnavailableError) as exc:
         await callback.answer("Не удалось загрузить слоты", show_alert=True)
-        await edit_or_send(
+        await render_screen(
             callback,
             f"⚠️ {html.escape(str(getattr(exc, 'message', exc)))}",
-            back_menu(),
+            inline_keyboard=back_menu(),
         )
         return
 
     price_text = await _student_price_text(api, db, callback.from_user.id)
     text, keyboard = _slots_view(slots, page, price_text)
-    await edit_or_send(callback, text, keyboard)
+    await render_screen(callback, text, inline_keyboard=keyboard)
     await callback.answer()
 
 
@@ -177,10 +193,10 @@ async def cb_book(
     student_id = await db.get_student_id(callback.from_user.id)
     if student_id is None:
         await callback.answer("Сначала создайте профиль или привяжите ID.", show_alert=True)
-        await edit_or_send(
+        await render_screen(
             callback,
             "Чтобы записаться, создайте профиль ученика или привяжите существующий ID.",
-            onboarding_menu(),
+            inline_keyboard=onboarding_menu(),
         )
         return
 
@@ -188,10 +204,10 @@ async def cb_book(
         slots = await _available_slots(api)
     except (ApiError, ApiUnavailableError) as exc:
         await callback.answer("Сервис недоступен", show_alert=True)
-        await edit_or_send(
+        await render_screen(
             callback,
             f"⚠️ {html.escape(str(getattr(exc, 'message', exc)))}",
-            back_menu(),
+            inline_keyboard=back_menu(),
         )
         return
 
@@ -202,26 +218,34 @@ async def cb_book(
     if slot is None:
         await callback.answer("Этот слот уже занят или недоступен.", show_alert=True)
         text, keyboard = _slots_view(slots, 0)
-        await edit_or_send(callback, text, keyboard)
+        await render_screen(callback, text, inline_keyboard=keyboard)
         return
 
     try:
         subjects = await api.get_student_subjects(student_id)
     except ApiError as exc:
         await callback.answer("Не удалось загрузить предметы", show_alert=True)
-        await edit_or_send(callback, f"⚠️ {html.escape(exc.message)}", back_menu())
+        await render_screen(
+            callback,
+            f"⚠️ {html.escape(exc.message)}",
+            inline_keyboard=back_menu(),
+        )
         return
     except ApiUnavailableError as exc:
         await callback.answer("Сервис недоступен", show_alert=True)
-        await edit_or_send(callback, f"⚠️ {html.escape(str(exc))}", back_menu())
+        await render_screen(
+            callback,
+            f"⚠️ {html.escape(str(exc))}",
+            inline_keyboard=back_menu(),
+        )
         return
 
     if not subjects:
         await callback.answer("У профиля нет предметов", show_alert=True)
-        await edit_or_send(
+        await render_screen(
             callback,
             "У вашего профиля не указаны предметы. Попросите преподавателя добавить предмет.",
-            back_menu(),
+            inline_keyboard=back_menu(),
         )
         return
 
@@ -242,7 +266,7 @@ async def cb_book(
         text += f"\n💰 Стоимость занятия: <b>{html.escape(price_text)}</b>\n"
     text += "\nПредмет должен быть закреплён за вами в профиле."
 
-    await edit_or_send(callback, text, subjects_menu(slot_id, subjects))
+    await render_screen(callback, text, inline_keyboard=subjects_menu(slot_id, subjects))
     await callback.answer()
 
 
@@ -268,10 +292,10 @@ async def cb_book_subject(
     student_id = await db.get_student_id(callback.from_user.id)
     if student_id is None:
         await callback.answer("Сначала создайте профиль или привяжите ID.", show_alert=True)
-        await edit_or_send(
+        await render_screen(
             callback,
             "Чтобы записаться, создайте профиль ученика или привяжите существующий ID.",
-            onboarding_menu(),
+            inline_keyboard=onboarding_menu(),
         )
         return
 
@@ -279,19 +303,27 @@ async def cb_book_subject(
         subjects = await api.get_student_subjects(student_id)
     except ApiError as exc:
         await callback.answer("Не удалось загрузить предметы", show_alert=True)
-        await edit_or_send(callback, f"⚠️ {html.escape(exc.message)}", back_menu())
+        await render_screen(
+            callback,
+            f"⚠️ {html.escape(exc.message)}",
+            inline_keyboard=back_menu(),
+        )
         return
     except ApiUnavailableError as exc:
         await callback.answer("Сервис недоступен", show_alert=True)
-        await edit_or_send(callback, f"⚠️ {html.escape(str(exc))}", back_menu())
+        await render_screen(
+            callback,
+            f"⚠️ {html.escape(str(exc))}",
+            inline_keyboard=back_menu(),
+        )
         return
 
     if subject_index < 0 or subject_index >= len(subjects):
         await callback.answer("Список предметов изменился", show_alert=True)
-        await edit_or_send(
+        await render_screen(
             callback,
             "Список предметов изменился. Выберите слот заново.",
-            back_menu(),
+            inline_keyboard=back_menu(),
         )
         return
 
@@ -301,10 +333,10 @@ async def cb_book_subject(
         slots = await _available_slots(api)
     except (ApiError, ApiUnavailableError) as exc:
         await callback.answer("Сервис недоступен", show_alert=True)
-        await edit_or_send(
+        await render_screen(
             callback,
             f"⚠️ {html.escape(str(getattr(exc, 'message', exc)))}",
-            back_menu(),
+            inline_keyboard=back_menu(),
         )
         return
 
@@ -315,7 +347,7 @@ async def cb_book_subject(
     if slot is None:
         await callback.answer("Этот слот уже занят или недоступен.", show_alert=True)
         text, keyboard = _slots_view(slots, 0)
-        await edit_or_send(callback, text, keyboard)
+        await render_screen(callback, text, inline_keyboard=keyboard)
         return
 
     try:
@@ -327,11 +359,15 @@ async def cb_book_subject(
         except (ApiError, ApiUnavailableError):
             return
         text, keyboard = _slots_view(fresh_slots, 0)
-        await edit_or_send(callback, text, keyboard)
+        await render_screen(callback, text, inline_keyboard=keyboard)
         return
     except ApiUnavailableError as exc:
         await callback.answer("Сервис недоступен", show_alert=True)
-        await edit_or_send(callback, f"⚠️ {html.escape(str(exc))}", back_menu())
+        await render_screen(
+            callback,
+            f"⚠️ {html.escape(str(exc))}",
+            inline_keyboard=back_menu(),
+        )
         return
 
     try:
@@ -355,8 +391,8 @@ async def cb_book_subject(
         else ""
     )
 
-    await edit_or_send(
-        callback,
+    await send_screen(
+        callback.message,
         f"✅ <b>Вы записаны!</b>\n\n"
         f"📅 <b>{time_range}</b>\n"
         f"📚 Предмет: <b>{booked_subject}</b>\n"
@@ -365,7 +401,7 @@ async def cb_book_subject(
         f"{price_line}"
         f"👤 ID ученика: {student_id}\n\n"
         f"Отменить запись можно в разделе «Мои записи».",
-        after_booking(),
+        reply_keyboard=main_reply_menu(settings.is_admin(callback.from_user.id)),
     )
 
     student = booking.get("student") or {}
@@ -377,6 +413,7 @@ async def cb_book_subject(
         )
         if part
     ) or f"ID {student_id}"
+    notification_id = booking.get("id")
     await _notify_tutors(
         callback.bot,
         settings.admin_ids,
@@ -387,6 +424,9 @@ async def cb_book_subject(
         f"{format_line}"
         f"💰 {price}{trial_note}\n"
         f"🎟 #{booking_id}",
+        keyboard=notification_menu(
+            int(notification_id) if isinstance(notification_id, int) else None
+        ),
     )
     await callback.answer("Готово!")
 
@@ -410,24 +450,34 @@ def _bookings_text(rows: list[dict]) -> str:
     return "\n\n".join(lines)
 
 
+async def render_bookings(
+    message: Message,
+    state: FSMContext,
+    db: Database,
+    telegram_id: int,
+) -> None:
+    await state.clear()
+    rows = await db.list_bookings(telegram_id)
+    await send_screen(
+        message,
+        _bookings_text(rows),
+        inline_keyboard=bookings_menu(rows[:MAX_BOOKINGS_IN_MESSAGE]),
+    )
+
+
 @router.message(Command("bookings"))
 async def cmd_bookings(message: Message, state: FSMContext, db: Database) -> None:
-    await state.clear()
-    rows = await db.list_bookings(message.from_user.id)
-    await message.answer(
-        _bookings_text(rows),
-        reply_markup=bookings_menu(rows[:MAX_BOOKINGS_IN_MESSAGE]),
-    )
+    await render_bookings(message, state, db, message.from_user.id)
 
 
 @router.callback_query(F.data == "my_bookings")
 async def cb_my_bookings(callback: CallbackQuery, state: FSMContext, db: Database) -> None:
     await state.clear()
     rows = await db.list_bookings(callback.from_user.id)
-    await edit_or_send(
+    await render_screen(
         callback,
         _bookings_text(rows),
-        bookings_menu(rows[:MAX_BOOKINGS_IN_MESSAGE]),
+        inline_keyboard=bookings_menu(rows[:MAX_BOOKINGS_IN_MESSAGE]),
     )
     await callback.answer()
 
@@ -445,11 +495,11 @@ async def cb_cancel(callback: CallbackQuery, db: Database) -> None:
         await callback.answer("Запись не найдена.", show_alert=True)
         return
 
-    await edit_or_send(
+    await render_screen(
         callback,
         f"❓ Отменить запись?\n\n{format_booking_line(row)}\n\n"
         "Слот снова станет доступен другим ученикам.",
-        cancel_confirm(booking_id),
+        inline_keyboard=cancel_confirm(booking_id),
     )
     await callback.answer()
 
@@ -478,17 +528,21 @@ async def cb_cancel_confirm(
         if exc.status_code == 404 or "уже отменена" in exc.message.lower():
             await db.mark_cancelled(booking_id)
             await callback.answer("Запись уже была отменена.", show_alert=True)
-            await edit_or_send(
-                callback,
+            await send_screen(
+                callback.message,
                 f"ℹ️ Запись <b>#{booking_id}</b> уже отменена.",
-                after_booking(),
+                reply_keyboard=main_reply_menu(settings.is_admin(callback.from_user.id)),
             )
             return
         await callback.answer(f"Не удалось отменить: {exc.message}"[:200], show_alert=True)
         return
     except ApiUnavailableError as exc:
         await callback.answer("Сервис недоступен", show_alert=True)
-        await edit_or_send(callback, f"⚠️ {html.escape(str(exc))}", back_menu())
+        await render_screen(
+            callback,
+            f"⚠️ {html.escape(str(exc))}",
+            inline_keyboard=back_menu(),
+        )
         return
 
     await db.mark_cancelled(booking_id)
@@ -527,13 +581,14 @@ async def cb_cancel_confirm(
         f"{subject_line}"
         f"{format_line}"
         f"🎟 #{booking_id}",
+        keyboard=notification_menu(booking_id),
     )
 
-    await edit_or_send(
-        callback,
+    await send_screen(
+        callback.message,
         f"✅ Запись <b>#{booking_id}</b> отменена.\n\n"
         f"{format_time_range(row.get('start_time'), row.get('end_time'))}\n"
         "Слот снова свободен.",
-        after_booking(),
+        reply_keyboard=main_reply_menu(settings.is_admin(callback.from_user.id)),
     )
     await callback.answer("Отменено")

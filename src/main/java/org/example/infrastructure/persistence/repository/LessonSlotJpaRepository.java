@@ -20,4 +20,10 @@ public interface LessonSlotJpaRepository extends JpaRepository<LessonSlotEntity,
             "WHERE :newStart < s.endTime AND :newEnd > s.startTime")
     boolean existsOverlappingSlot(@Param("newStart") LocalDateTime newStart,
                                   @Param("newEnd") LocalDateTime newEnd);
+
+    @Query("SELECT s FROM LessonSlotEntity s " +
+            "WHERE :newStart < s.endTime AND :newEnd > s.startTime " +
+            "ORDER BY s.startTime")
+    List<LessonSlotEntity> findOverlappingSlots(@Param("newStart") LocalDateTime newStart,
+                                                @Param("newEnd") LocalDateTime newEnd);
 }

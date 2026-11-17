@@ -14,16 +14,15 @@ from ..config import Settings
 from ..filters import PLAIN_TEXT
 from ..formatters import format_student_profile
 from ..keyboards import (
-    admin_panel,
     back_menu,
-    cancel_flow,
-    main_menu,
+    flow_reply_menu,
+    main_reply_menu,
     onboarding_menu,
     profile_menu,
 )
 from ..states import LinkStudent
 from ..storage import Database
-from ..ui import edit_or_send as _edit_or_send
+from ..ui import edit_prompt, render_screen, send_screen
 
 router = Router(name="common")
 
@@ -77,18 +76,39 @@ def _help_text(is_admin: bool) -> str:
     return "\n".join(lines)
 
 
-async def _send_main_menu(
+async def render_main_menu(
     message: Message,
     db: Database,
     settings: Settings,
     text: str | None = None,
 ) -> None:
+    """Главное меню с постоянной reply-клавиатурой."""
     telegram_id = message.from_user.id
     student_id = await db.get_student_id(telegram_id)
     is_admin = settings.is_admin(telegram_id)
-    await message.answer(
-        text or _welcome_text(message.from_user.first_name, student_id is not None, is_admin),
-        reply_markup=main_menu(is_admin, student_id is not None),
+    await send_screen(
+        message,
+        text
+        or _welcome_text(
+            message.from_user.first_name,
+            student_id is not None,
+            is_admin,
+        ),
+        reply_keyboard=main_reply_menu(is_admin),
+    )
+
+
+async def render_help(message: Message, settings: Settings) -> None:
+    is_admin = settings.is_admin(message.from_user.id)
+    await send_screen(message, _help_text(is_admin), inline_keyboard=back_menu())
+
+
+async def render_admin_panel(message: Message) -> None:
+    await send_screen(
+        message,
+        "🛠 <b>Панель преподавателя</b>\n\n"
+        "Создавайте слоты, просматривайте учеников и отмечайте посещаемость.",
+        reply_keyboard=main_reply_menu(True),
     )
 
 
@@ -98,26 +118,25 @@ async def _send_main_menu(
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext, db: Database, settings: Settings) -> None:
     await state.clear()
-    await _send_main_menu(message, db, settings)
+    await render_main_menu(message, db, settings)
 
 
 @router.message(Command("menu"))
 async def cmd_menu(message: Message, state: FSMContext, db: Database, settings: Settings) -> None:
     await state.clear()
-    await _send_main_menu(message, db, settings)
+    await render_main_menu(message, db, settings)
 
 
 @router.message(Command("cancel"))
 async def cmd_cancel(message: Message, state: FSMContext, db: Database, settings: Settings) -> None:
     await state.clear()
-    await _send_main_menu(message, db, settings, "Действие отменено. Вы снова в главном меню.")
+    await render_main_menu(message, db, settings, "Действие отменено. Вы снова в главном меню.")
 
 
 @router.message(Command("help"))
 async def cmd_help(message: Message, state: FSMContext, settings: Settings) -> None:
     await state.clear()
-    is_admin = settings.is_admin(message.from_user.id)
-    await message.answer(_help_text(is_admin), reply_markup=back_menu())
+    await render_help(message, settings)
 
 
 @router.message(Command("admin"))
@@ -127,11 +146,7 @@ async def cmd_admin(message: Message, state: FSMContext, settings: Settings) -> 
         await message.answer("⛔ Эта команда доступна только преподавателю.")
         return
 
-    await message.answer(
-        "🛠 <b>Панель преподавателя</b>\n\n"
-        "Создавайте слоты, просматривайте учеников и отмечайте посещаемость.",
-        reply_markup=admin_panel(),
-    )
+    await render_admin_panel(message)
 
 
 @router.callback_query(F.data == "menu")
@@ -144,10 +159,10 @@ async def cb_menu(
     await state.clear()
     student_id = await db.get_student_id(callback.from_user.id)
     is_admin = settings.is_admin(callback.from_user.id)
-    await _edit_or_send(
-        callback,
+    await send_screen(
+        callback.message,
         _welcome_text(callback.from_user.first_name, student_id is not None, is_admin),
-        main_menu(is_admin, student_id is not None),
+        reply_keyboard=main_reply_menu(is_admin),
     )
     await callback.answer()
 
@@ -156,7 +171,7 @@ async def cb_menu(
 async def cb_help(callback: CallbackQuery, state: FSMContext, settings: Settings) -> None:
     await state.clear()
     is_admin = settings.is_admin(callback.from_user.id)
-    await _edit_or_send(callback, _help_text(is_admin), back_menu())
+    await render_screen(callback, _help_text(is_admin), inline_keyboard=back_menu())
     await callback.answer()
 
 
@@ -164,11 +179,11 @@ async def cb_help(callback: CallbackQuery, state: FSMContext, settings: Settings
 # Профиль
 # ---------------------------------------------------------------------- #
 async def _profile_payload(
-    callback: CallbackQuery,
+    telegram_id: int,
     db: Database,
     api: ApiClient,
 ) -> tuple[str, InlineKeyboardMarkup]:
-    student_id = await db.get_student_id(callback.from_user.id)
+    student_id = await db.get_student_id(telegram_id)
     if student_id is None:
         return (
             "Профиль ещё не создан. Зарегистрируйтесь или привяжите существующий ID.",
@@ -192,65 +207,54 @@ async def _profile_payload(
     return (format_student_profile(student_id, student), profile_menu())
 
 
+async def render_profile(message: Message, db: Database, api: ApiClient) -> None:
+    text, keyboard = await _profile_payload(message.from_user.id, db, api)
+    await send_screen(message, text, inline_keyboard=keyboard)
+
+
 @router.message(Command("profile"))
 async def cmd_profile(message: Message, state: FSMContext, db: Database, api: ApiClient) -> None:
     await state.clear()
-    student_id = await db.get_student_id(message.from_user.id)
-    if student_id is None:
-        await message.answer(
-            "Профиль ещё не создан. Зарегистрируйтесь или привяжите существующий ID.",
-            reply_markup=onboarding_menu(),
-        )
-        return
-
-    try:
-        student = await api.find_student(student_id)
-    except (ApiError, ApiUnavailableError) as exc:
-        await message.answer(f"⚠️ {html.escape(str(getattr(exc, 'message', exc)))}")
-        return
-
-    if student is None:
-        await message.answer(
-            f"⚠️ Профиль с ID <b>{student_id}</b> не найден в сервисе. Привяжите актуальный ID.",
-            reply_markup=profile_menu(),
-        )
-        return
-
-    await message.answer(format_student_profile(student_id, student), reply_markup=profile_menu())
+    await render_profile(message, db, api)
 
 
 @router.callback_query(F.data == "profile")
 async def cb_profile(callback: CallbackQuery, db: Database, api: ApiClient) -> None:
-    text, keyboard = await _profile_payload(callback, db, api)
-    await _edit_or_send(callback, text, keyboard)
+    text, keyboard = await _profile_payload(callback.from_user.id, db, api)
+    await render_screen(callback, text, inline_keyboard=keyboard)
     await callback.answer()
 
 
 # ---------------------------------------------------------------------- #
 # Привязка существующего ID
 # ---------------------------------------------------------------------- #
+def _link_prompt(student_id: int | None) -> str:
+    hint = f"Текущий привязанный ID: <b>{student_id}</b>.\n\n" if student_id else ""
+    return (
+        f"{hint}Введите числовой ID ученика из сервиса.\n"
+        "Его можно посмотреть в списке учеников у преподавателя."
+    )
+
+
 @router.message(Command("link"))
 async def cmd_link(message: Message, state: FSMContext, db: Database) -> None:
     student_id = await db.get_student_id(message.from_user.id)
-    hint = f"Текущий привязанный ID: <b>{student_id}</b>.\n\n" if student_id else ""
     await state.set_state(LinkStudent.waiting_id)
-    await message.answer(
-        f"{hint}Введите числовой ID ученика из сервиса.\n"
-        "Его можно посмотреть в списке учеников у преподавателя.",
-        reply_markup=cancel_flow(),
+    await send_screen(
+        message,
+        _link_prompt(student_id),
+        reply_keyboard=flow_reply_menu(),
     )
 
 
 @router.callback_query(F.data == "link")
 async def cb_link(callback: CallbackQuery, state: FSMContext, db: Database) -> None:
     student_id = await db.get_student_id(callback.from_user.id)
-    hint = f"Текущий привязанный ID: <b>{student_id}</b>.\n\n" if student_id else ""
     await state.set_state(LinkStudent.waiting_id)
-    await _edit_or_send(
-        callback,
-        f"{hint}Введите числовой ID ученика из сервиса.\n"
-        "Его можно посмотреть в списке учеников у преподавателя.",
-        cancel_flow(),
+    await send_screen(
+        callback.message,
+        _link_prompt(student_id),
+        reply_keyboard=flow_reply_menu(),
     )
     await callback.answer()
 
@@ -263,24 +267,28 @@ async def process_link_id(
     db: Database,
     settings: Settings,
 ) -> None:
+    current_id = await db.get_student_id(message.from_user.id)
+    prompt = _link_prompt(current_id)
     raw = (message.text or "").strip()
     if not raw.isdigit():
-        await message.answer("ID должен состоять только из цифр. Попробуйте ещё раз.")
+        await edit_prompt(message, f"⚠️ ID должен состоять только из цифр.\n\n{prompt}")
         return
 
     student_id = int(raw)
     try:
         student = await api.find_student(student_id)
     except ApiUnavailableError as exc:
-        await message.answer(f"⚠️ {html.escape(str(exc))}")
+        await edit_prompt(message, f"⚠️ {html.escape(str(exc))}\n\n{prompt}")
         return
     except ApiError as exc:
-        await message.answer(f"⚠️ {html.escape(exc.message)}")
+        await edit_prompt(message, f"⚠️ {html.escape(exc.message)}\n\n{prompt}")
         return
 
     if student is None:
-        await message.answer(
-            f"Ученик с ID <b>{student_id}</b> не найден. Проверьте ID и попробуйте снова."
+        await edit_prompt(
+            message,
+            f"⚠️ Ученик с ID <b>{student_id}</b> не найден. "
+            f"Проверьте ID и попробуйте снова.\n\n{prompt}",
         )
         return
 
@@ -288,9 +296,10 @@ async def process_link_id(
     await state.clear()
 
     name = html.escape(str(student.get("fullName") or f"ID {student_id}"))
-    await message.answer(
+    await send_screen(
+        message,
         f"✅ Аккаунт привязан к ученику <b>{name}</b>.",
-        reply_markup=main_menu(settings.is_admin(message.from_user.id), True),
+        reply_keyboard=main_reply_menu(settings.is_admin(message.from_user.id)),
     )
 
 

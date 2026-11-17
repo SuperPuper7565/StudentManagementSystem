@@ -20,16 +20,16 @@ from ..formatters import (
     parse_grade,
 )
 from ..keyboards import (
-    cancel_flow,
+    flow_reply_menu,
     formats_menu,
     goal_skip_menu,
-    main_menu,
+    main_reply_menu,
     registration_confirm,
     registration_subjects_menu,
 )
 from ..states import Registration
 from ..storage import Database
-from ..ui import edit_or_send
+from ..ui import edit_prompt, render_screen, send_screen
 
 router = Router(name="registration")
 
@@ -53,15 +53,28 @@ def _format_prompt() -> str:
     return _step(6, "Выберите формат занятий.")
 
 
-async def _start_registration(
-    message: Message,
-    state: FSMContext,
-) -> None:
+def _summary(data: dict) -> str:
+    subject_names = data.get("subject_names") or []
+    subjects_text = ", ".join(str(name) for name in subject_names) or "—"
+    return (
+        "📋 <b>Проверьте данные профиля</b>\n\n"
+        f"Имя: <b>{html.escape(str(data.get('first_name') or '—'))}</b>\n"
+        f"Фамилия: <b>{html.escape(str(data.get('last_name') or '—'))}</b>\n"
+        f"Предметы: <b>{html.escape(subjects_text)}</b>\n"
+        f"Класс: <b>{html.escape(str(data.get('grade') or '—'))}</b>\n"
+        f"Цель: <b>{html.escape(format_goal(data.get('goal')))}</b>\n"
+        f"Формат: <b>{html.escape(format_lesson_format(data.get('lesson_format')))}</b>\n\n"
+        "Стоимость занятия рассчитает сервис после создания профиля."
+    )
+
+
+async def _start_registration(message: Message, state: FSMContext) -> None:
     await state.clear()
     await state.set_state(Registration.first_name)
-    await message.answer(
+    await send_screen(
+        message,
         _step(1, "Как вас зовут? Введите имя."),
-        reply_markup=cancel_flow(),
+        reply_keyboard=flow_reply_menu(),
     )
 
 
@@ -74,10 +87,10 @@ async def cmd_register(message: Message, state: FSMContext) -> None:
 async def cb_register(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await state.set_state(Registration.first_name)
-    await edit_or_send(
-        callback,
+    await send_screen(
+        callback.message,
         _step(1, "Как вас зовут? Введите имя."),
-        cancel_flow(),
+        reply_keyboard=flow_reply_menu(),
     )
     await callback.answer()
 
@@ -107,15 +120,20 @@ async def registration_subjects_non_text(message: Message) -> None:
 # ---------------------------------------------------------------------- #
 @router.message(Registration.first_name, PLAIN_TEXT)
 async def reg_first_name(message: Message, state: FSMContext) -> None:
+    prompt = _step(1, "Как вас зовут? Введите имя.")
     try:
         value = clean_text(message.text or "", "Имя", max_length=60)
     except ValueError as exc:
-        await message.answer(f"⚠️ {html.escape(str(exc))}\nПопробуйте ещё раз.")
+        await edit_prompt(message, f"⚠️ {html.escape(str(exc))}\n\n{prompt}")
         return
 
     await state.update_data(first_name=value)
     await state.set_state(Registration.last_name)
-    await message.answer(_step(2, "Введите фамилию."), reply_markup=cancel_flow())
+    await send_screen(
+        message,
+        _step(2, "Введите фамилию."),
+        reply_keyboard=flow_reply_menu(),
+    )
 
 
 @router.message(Registration.last_name, PLAIN_TEXT)
@@ -124,10 +142,11 @@ async def reg_last_name(
     state: FSMContext,
     api: ApiClient,
 ) -> None:
+    prompt = _step(2, "Введите фамилию.")
     try:
         value = clean_text(message.text or "", "Фамилия", max_length=60)
     except ValueError as exc:
-        await message.answer(f"⚠️ {html.escape(str(exc))}\nПопробуйте ещё раз.")
+        await edit_prompt(message, f"⚠️ {html.escape(str(exc))}\n\n{prompt}")
         return
 
     try:
@@ -135,16 +154,19 @@ async def reg_last_name(
         if not options:
             options = await api.get_subjects()
     except ApiUnavailableError as exc:
-        await message.answer(f"⚠️ {html.escape(str(exc))}")
+        await edit_prompt(message, f"⚠️ {html.escape(str(exc))}\n\n{prompt}")
         return
     except ApiError as exc:
-        await message.answer(f"⚠️ Не удалось загрузить предметы: {html.escape(exc.message)}")
+        await edit_prompt(
+            message,
+            f"⚠️ Не удалось загрузить предметы: {html.escape(exc.message)}\n\n{prompt}",
+        )
         return
 
     if not options:
-        await message.answer(
-            "⚠️ Список предметов пуст. Обратитесь к преподавателю.",
-            reply_markup=cancel_flow(),
+        await edit_prompt(
+            message,
+            "⚠️ Список предметов пуст. Обратитесь к преподавателю.\n\n" + prompt,
         )
         return
 
@@ -154,9 +176,10 @@ async def reg_last_name(
         selected_subjects=[],
     )
     await state.set_state(Registration.subjects)
-    await message.answer(
+    await send_screen(
+        message,
         _subjects_prompt(),
-        reply_markup=registration_subjects_menu(options, set()),
+        inline_keyboard=registration_subjects_menu(options, set()),
     )
 
 
@@ -184,10 +207,10 @@ async def cb_reg_subject(callback: CallbackQuery, state: FSMContext) -> None:
         ]
         await state.update_data(subjects=sorted(selected), subject_names=names)
         await state.set_state(Registration.grade)
-        await edit_or_send(
-            callback,
+        await send_screen(
+            callback.message,
             _step(4, "Введите класс (число от 1 до 11)."),
-            cancel_flow(),
+            reply_keyboard=flow_reply_menu(),
         )
         await callback.answer()
         return
@@ -203,36 +226,43 @@ async def cb_reg_subject(callback: CallbackQuery, state: FSMContext) -> None:
         selected.add(action)
 
     await state.update_data(selected_subjects=sorted(selected))
-    await edit_or_send(
+    await render_screen(
         callback,
         _subjects_prompt(),
-        registration_subjects_menu(options, selected),
+        inline_keyboard=registration_subjects_menu(options, selected),
     )
     await callback.answer()
 
 
 @router.message(Registration.grade, PLAIN_TEXT)
 async def reg_grade(message: Message, state: FSMContext) -> None:
+    prompt = _step(4, "Введите класс (число от 1 до 11).")
     try:
         grade = parse_grade(message.text or "")
     except ValueError as exc:
-        await message.answer(f"⚠️ {html.escape(str(exc))}")
+        await edit_prompt(message, f"⚠️ {html.escape(str(exc))}\n\n{prompt}")
         return
 
     await state.update_data(grade=grade)
     await state.set_state(Registration.goal)
-    await message.answer(
+    await send_screen(
+        message,
         _step(
             5,
             "Цель обучения (необязательно).\n\n"
             "Напишите её текстом или нажмите «Пропустить».",
         ),
-        reply_markup=goal_skip_menu(),
+        inline_keyboard=goal_skip_menu(),
     )
 
 
 @router.message(Registration.goal, PLAIN_TEXT)
 async def reg_goal_text(message: Message, state: FSMContext) -> None:
+    prompt = _step(
+        5,
+        "Цель обучения (необязательно).\n\n"
+        "Напишите её текстом или нажмите «Пропустить».",
+    )
     raw = (message.text or "").strip()
     goal: str | None = None
 
@@ -240,19 +270,23 @@ async def reg_goal_text(message: Message, state: FSMContext) -> None:
         try:
             goal = clean_text(raw, "Цель обучения", max_length=200)
         except ValueError as exc:
-            await message.answer(f"⚠️ {html.escape(str(exc))}\nПопробуйте ещё раз.")
+            await edit_prompt(
+                message,
+                f"⚠️ {html.escape(str(exc))}\n\n{prompt}",
+                inline_keyboard=goal_skip_menu(),
+            )
             return
 
     await state.update_data(goal=goal)
     await state.set_state(Registration.lesson_format)
-    await message.answer(_format_prompt(), reply_markup=formats_menu())
+    await send_screen(message, _format_prompt(), inline_keyboard=formats_menu())
 
 
 @router.callback_query(Registration.goal, F.data == "goal:skip")
 async def cb_goal_skip(callback: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(goal=None)
     await state.set_state(Registration.lesson_format)
-    await edit_or_send(callback, _format_prompt(), formats_menu())
+    await render_screen(callback, _format_prompt(), inline_keyboard=formats_menu())
     await callback.answer()
 
 
@@ -266,20 +300,8 @@ async def reg_format(callback: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(lesson_format=lesson_format)
     data = await state.get_data()
 
-    subject_names = data.get("subject_names") or []
-    subjects_text = ", ".join(str(name) for name in subject_names) or "—"
-    summary = (
-        "📋 <b>Проверьте данные профиля</b>\n\n"
-        f"Имя: <b>{html.escape(data['first_name'])}</b>\n"
-        f"Фамилия: <b>{html.escape(data['last_name'])}</b>\n"
-        f"Предметы: <b>{html.escape(subjects_text)}</b>\n"
-        f"Класс: <b>{data['grade']}</b>\n"
-        f"Цель: <b>{html.escape(format_goal(data.get('goal')))}</b>\n"
-        f"Формат: <b>{html.escape(format_lesson_format(lesson_format))}</b>\n\n"
-        "Стоимость занятия рассчитает сервис после создания профиля."
-    )
     await state.set_state(Registration.confirm)
-    await edit_or_send(callback, summary, registration_confirm())
+    await render_screen(callback, _summary(data), inline_keyboard=registration_confirm())
     await callback.answer()
 
 
@@ -291,12 +313,9 @@ async def reg_cancel(
     settings: Settings,
 ) -> None:
     await state.clear()
-    student_id = await db.get_student_id(callback.from_user.id)
-    await edit_or_send(
-        callback,
-        "Регистрация отменена.",
-        main_menu(settings.is_admin(callback.from_user.id), student_id is not None),
-    )
+    from .common import render_main_menu
+
+    await render_main_menu(callback.message, db, settings, "Регистрация отменена.")
     await callback.answer()
 
 
@@ -328,20 +347,27 @@ async def reg_confirm(
     try:
         student = await api.register_student(payload)
     except ApiUnavailableError as exc:
-        await callback.message.answer(f"⚠️ {html.escape(str(exc))}")
+        await render_screen(
+            callback,
+            f"⚠️ {html.escape(str(exc))}\n\n{_summary(data)}",
+            inline_keyboard=registration_confirm(),
+        )
         return
     except ApiError as exc:
-        await callback.message.answer(
+        await render_screen(
+            callback,
             f"⚠️ Не удалось создать профиль: {html.escape(exc.message)}\n"
-            "Проверьте данные и попробуйте снова.",
-            reply_markup=registration_confirm(),
+            f"Проверьте данные и попробуйте снова.\n\n{_summary(data)}",
+            inline_keyboard=registration_confirm(),
         )
         return
 
     student_id = student.get("id")
     if student_id is None or int(student_id) <= 0:
-        await callback.message.answer(
-            "⚠️ Сервис создал профиль, но не вернул корректный ID. Обратитесь к преподавателю."
+        await render_screen(
+            callback,
+            "⚠️ Сервис создал профиль, но не вернул корректный ID. Обратитесь к преподавателю.",
+            inline_keyboard=registration_confirm(),
         )
         return
 
@@ -367,12 +393,12 @@ async def reg_confirm(
         )
         or data["first_name"]
     )
-    await edit_or_send(
-        callback,
+    await send_screen(
+        callback.message,
         f"✅ Профиль создан!\n\n"
         f"👤 <b>{name}</b>\n"
         f"🆔 ID ученика: <b>{student_id}</b>\n"
         f"{price_line}\n\n"
         f"Теперь можно выбирать свободные слоты и записываться на занятия.",
-        main_menu(settings.is_admin(callback.from_user.id), True),
+        reply_keyboard=main_reply_menu(settings.is_admin(callback.from_user.id)),
     )

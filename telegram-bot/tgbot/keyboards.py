@@ -5,15 +5,94 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+)
 
 from .formatters import format_datetime, slot_button_text
 
 Button = InlineKeyboardButton
+ReplyButton = KeyboardButton
+
+# Тексты кнопок постоянной reply-клавиатуры. Держим в одном месте, чтобы
+# навигационный роутер и клавиатура не разъезжались.
+REPLY_SLOTS = "📅 Слоты"
+REPLY_BOOKINGS = "🎟 Мои записи"
+REPLY_PROFILE = "👤 Профиль"
+REPLY_HELP = "ℹ️ Помощь"
+REPLY_CREATE_SLOT = "➕ Слот"
+REPLY_SUBJECTS = "📚 Предметы"
+REPLY_STUDENTS = "👥 Ученики"
+REPLY_ATTENDANCE = "✅ Посещаемость"
+REPLY_ADMIN_PANEL = "🛠 Панель"
+REPLY_CANCEL = "✖️ Отмена"
+
+STUDENT_REPLY_BUTTONS = (REPLY_SLOTS, REPLY_BOOKINGS, REPLY_PROFILE, REPLY_HELP)
+ADMIN_REPLY_BUTTONS = (
+    REPLY_CREATE_SLOT,
+    REPLY_SUBJECTS,
+    REPLY_STUDENTS,
+    REPLY_ATTENDANCE,
+    REPLY_ADMIN_PANEL,
+)
+ALL_REPLY_BUTTONS = STUDENT_REPLY_BUTTONS + ADMIN_REPLY_BUTTONS + (REPLY_CANCEL,)
 
 
 def _kb(*rows: list[Button]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=list(rows))
+
+
+def _reply_kb(*rows: list[ReplyButton]) -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=list(rows),
+        resize_keyboard=True,
+        is_persistent=True,
+    )
+
+
+def main_reply_menu(is_admin: bool) -> ReplyKeyboardMarkup:
+    """Постоянная клавиатура навигации внизу чата."""
+    rows = [
+        [ReplyButton(text=REPLY_SLOTS), ReplyButton(text=REPLY_BOOKINGS)],
+        [ReplyButton(text=REPLY_PROFILE), ReplyButton(text=REPLY_HELP)],
+    ]
+    if is_admin:
+        rows.extend(
+            [
+                [ReplyButton(text=REPLY_CREATE_SLOT), ReplyButton(text=REPLY_SUBJECTS)],
+                [ReplyButton(text=REPLY_STUDENTS), ReplyButton(text=REPLY_ATTENDANCE)],
+                [ReplyButton(text=REPLY_ADMIN_PANEL)],
+            ]
+        )
+    return _reply_kb(*rows)
+
+
+def flow_reply_menu() -> ReplyKeyboardMarkup:
+    """Клавиатура на время сценария: только отмена."""
+    return _reply_kb([ReplyButton(text=REPLY_CANCEL)])
+
+
+def notification_menu(booking_id: int | None = None) -> InlineKeyboardMarkup:
+    rows: list[list[Button]] = []
+    if booking_id is not None:
+        rows.append(
+            [
+                Button(
+                    text=f"📋 Запись #{booking_id}",
+                    callback_data=f"notif:booking:{int(booking_id)}",
+                )
+            ]
+        )
+    rows.append(
+        [
+            Button(text="✅ Посещаемость", callback_data="notif:attendance"),
+            Button(text="🏠 Меню", callback_data="notif:menu"),
+        ]
+    )
+    return _kb(*rows)
 
 
 def main_menu(is_admin: bool, registered: bool) -> InlineKeyboardMarkup:

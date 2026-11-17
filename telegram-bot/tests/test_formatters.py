@@ -10,6 +10,7 @@ from tgbot.formatters import (
     format_datetime,
     format_goal,
     format_price,
+    format_slot_conflict,
     format_student_card,
     format_time_range,
     is_slot_booked,
@@ -145,6 +146,71 @@ def test_format_booking_line_includes_subject_and_format():
     assert "Запись #7" in line
     assert "Информатика" in line
     assert "Офлайн" in line
+
+
+def test_format_slot_conflict_describes_booked_slot():
+    text = format_slot_conflict(
+        {
+            "startTime": "2026-10-25T14:00:00",
+            "endTime": "2026-10-25T15:30:00",
+            "overlap": True,
+            "conflicts": [
+                {
+                    "id": 12,
+                    "startTime": "2026-10-25T13:30:00",
+                    "endTime": "2026-10-25T15:00:00",
+                    "format": "OFFLINE",
+                    "booked": True,
+                }
+            ],
+        }
+    )
+
+    assert "25.10.2026 14:00–15:30" in text
+    assert "25.10.2026 13:30–15:00" in text
+    assert "Офлайн" in text
+    assert "уже забронировано" in text
+    assert "Введите другое время." in text
+
+
+def test_format_slot_conflict_marks_unbooked_slot():
+    text = format_slot_conflict(
+        {
+            "startTime": "2026-10-25T14:00:00",
+            "endTime": "2026-10-25T15:30:00",
+            "overlap": True,
+            "conflicts": [{"startTime": "2026-10-25T14:00:00", "booked": False}],
+        }
+    )
+
+    assert "слот уже создан" in text
+    assert "уже забронировано" not in text
+
+
+def test_format_slot_conflict_limits_listed_conflicts():
+    conflicts = [
+        {"startTime": f"2026-10-25T{hour:02d}:00:00", "booked": False}
+        for hour in range(14, 19)
+    ]
+
+    text = format_slot_conflict(
+        {
+            "startTime": "2026-10-25T14:00:00",
+            "endTime": "2026-10-25T15:30:00",
+            "conflicts": conflicts,
+        },
+        limit=3,
+    )
+
+    assert text.count("📅") == 3
+    assert "…и ещё 2." in text
+
+
+def test_format_slot_conflict_handles_missing_conflicts():
+    text = format_slot_conflict({"startTime": "2026-10-25T14:00:00"})
+
+    assert "В это время уже есть занятие." in text
+    assert "…и ещё" not in text
 
 
 def test_chunk_text_keeps_content():

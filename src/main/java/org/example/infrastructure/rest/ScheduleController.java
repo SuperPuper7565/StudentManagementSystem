@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.example.application.ScheduleViewService;
 import org.example.application.SlotManagementService;
+import org.example.application.dto.SlotOverlapResponse;
 import org.example.domain.model.LessonFormat;
 import org.example.domain.model.LessonSlot;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -31,6 +32,13 @@ public class ScheduleController {
             @RequestParam(required = false) LessonFormat format) {
         LessonSlot slot = slotManagementService.createSlot(startTime, format);
         return ResponseEntity.status(HttpStatus.CREATED).body(slot);
+    }
+
+    @GetMapping("/slots/overlap")
+    @Operation(summary = "Проверка пересечения нового слота с существующими занятиями")
+    public ResponseEntity<SlotOverlapResponse> checkOverlap(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime) {
+        return ResponseEntity.ok(slotManagementService.checkOverlap(startTime));
     }
 
     @GetMapping("/slots/available")

@@ -185,6 +185,61 @@ def test_create_slot_sends_format():
     assert captured["params"]["format"] == "OFFLINE"
 
 
+def test_check_slot_overlap_sends_start_time():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["path"] = request.url.path
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(
+            200,
+            json={
+                "startTime": "2026-10-25T14:00:00",
+                "endTime": "2026-10-25T15:30:00",
+                "overlap": True,
+                "conflicts": [
+                    {
+                        "id": 12,
+                        "startTime": "2026-10-25T13:30:00",
+                        "endTime": "2026-10-25T15:00:00",
+                        "format": "OFFLINE",
+                        "booked": True,
+                    }
+                ],
+            },
+        )
+
+    async def scenario():
+        api = ApiClient("http://backend", transport=httpx.MockTransport(handler))
+        try:
+            return await api.check_slot_overlap(datetime(2026, 10, 25, 14, 0))
+        finally:
+            await api.aclose()
+
+    result = _run(scenario())
+
+    assert captured["method"] == "GET"
+    assert captured["path"] == "/api/v1/schedule/slots/overlap"
+    assert captured["params"] == {"startTime": "2026-10-25T14:00:00"}
+    assert result["overlap"] is True
+    assert result["conflicts"][0]["id"] == 12
+
+
+def test_check_slot_overlap_returns_empty_dict_for_non_object():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=["unexpected"])
+
+    async def scenario():
+        api = ApiClient("http://backend", transport=httpx.MockTransport(handler))
+        try:
+            return await api.check_slot_overlap(datetime(2026, 10, 25, 14, 0))
+        finally:
+            await api.aclose()
+
+    assert _run(scenario()) == {}
+
+
 def test_book_lesson_sends_query_params():
     captured = {}
 

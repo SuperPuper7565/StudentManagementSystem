@@ -3,5 +3,7 @@ target/
 *.iml
 .mvn/
 *.log
+logs/
 data/
 info.md
+opencode.txt
